@@ -43,11 +43,40 @@ def render_video_generation_form(
             if reuse.get("aspect_ratio", None)
             else 1,
         )
+
+        resolution = st.selectbox(
+            "Resolution",
+            options=["720p", "1080p"],
+            index=0,
+            help="Resolution of the video.",
+        )
+
+        fps = st.selectbox(
+            "FPS",
+            options=[24, 48],
+            index=0,
+            help="Frames per second of the video.",
+        )
+
+        duration = st.slider(
+            "Duration (seconds)",
+            min_value=1,
+            max_value=10,
+            value=5,
+            help="Duration of the video in seconds. Ignored when audio is provided.",
+        )
+
         seed = st.number_input(
             "Seed",
             value=int(reuse["seed"])
             if isinstance(reuse.get("seed"), (int, float))
             else 0,
+        )
+
+        draft = st.checkbox(
+            "Draft mode",
+            value=bool(reuse.get("draft", False)),
+            help="Faster, lower-quality preview generation.",
         )
 
         st.markdown("---")
@@ -74,7 +103,11 @@ def render_video_generation_form(
     input_payload: Dict[str, Any] = {
         "prompt": prompt,
         "aspect_ratio": aspect_ratio,
+        "resolution": resolution,
+        "fps": int(fps),
+        "duration": int(duration),
         "seed": int(seed) if seed != 0 else None,
+        "draft": draft,
     }
     input_payload = {k: v for k, v in input_payload.items() if v is not None}
 
@@ -87,7 +120,9 @@ def render_video_generation_form(
             f.write(init_upload.getbuffer())
         init_ct = init_upload.type or "application/octet-stream"
         init_file = client.upload_file(file_path=init_path, content_type=init_ct)
-        input_payload["image"] = init_file.id
+        # API expects `input.image` as a fetchable URI (`format: uri`),
+        # not an opaque upload id.
+        input_payload["image"] = str(init_file.urls["get"])
 
     st.info("Starting prediction...")
     try:
