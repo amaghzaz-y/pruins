@@ -55,6 +55,7 @@ if task_page == "Gallery":
 
     for meta in runs:
         run_dir = meta["_run_dir"]
+        run_id = meta.get("_run_id") or os.path.basename(run_dir.rstrip(os.sep))
         task_type = meta.get("task_type") or meta.get("_task_type")
         model = meta.get("model")
         input_payload = meta.get("input_payload") or {}
@@ -68,7 +69,7 @@ if task_page == "Gallery":
             f"Run: {meta.get('_run_id')} • {created_at or completed_at or ''} • pred: {pred_id or ''}"
         )
 
-        preview_path = _first_media_path(run_dir)
+        preview_path = _first_media_path(outputs_dir, run_id)
         if preview_path:
             _maybe_preview(preview_path)
         else:

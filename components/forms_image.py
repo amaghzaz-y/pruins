@@ -37,7 +37,7 @@ def render_image_edit_form(
             index=max(
                 0,
                 ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"].index(
-                    reuse.get("aspect_ratio", "16:9")
+                    reuse.get("aspect_ratio", "3:4")
                 ),
             )
             if reuse.get("aspect_ratio", None)
@@ -49,10 +49,8 @@ def render_image_edit_form(
             if isinstance(reuse.get("seed"), (int, float))
             else 0,
         )
-        disable_safety_checker = st.checkbox(
-            "disable_safety_checker",
-            value=bool(reuse.get("disable_safety_checker", False)),
-        )
+        # Always disable safety checker (requested behavior).
+        disable_safety_checker = True
 
         st.markdown("---")
         src_uploads = st.file_uploader(

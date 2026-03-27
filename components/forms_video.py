@@ -37,7 +37,7 @@ def render_video_generation_form(
             index=max(
                 0,
                 ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"].index(
-                    reuse.get("aspect_ratio", "16:9")
+                    reuse.get("aspect_ratio", "3:4")
                 ),
             )
             if reuse.get("aspect_ratio", None)

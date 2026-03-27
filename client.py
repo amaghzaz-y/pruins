@@ -235,6 +235,11 @@ class PApiClient:
         else:
             dest = dest_path
 
+        # Ensure adequate extension when caller provided a filename without one.
+        # This prevents outputs like `output` from being written as-is.
+        if ext and not os.path.splitext(dest)[1]:
+            dest = f"{dest}.{ext}"
+
         os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
         with open(dest, "wb") as f:
             for chunk in resp.iter_content(chunk_size=1024 * 64):
