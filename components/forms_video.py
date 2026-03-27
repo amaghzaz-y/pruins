@@ -103,7 +103,8 @@ def render_video_generation_form(
             )
         st.success("Generation complete")
         st.subheader("Preview")
-        preview_path = _first_media_path(run_dir)
+        run_id = os.path.basename(run_dir.rstrip(os.sep))
+        preview_path = _first_media_path(outputs_dir, run_id)
         if preview_path:
             _maybe_preview(preview_path)
         st.caption(f"Saved to: {run_dir}")
