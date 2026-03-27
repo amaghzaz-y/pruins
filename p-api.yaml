@@ -1,0 +1,3028 @@
+openapi: 3.0.3
+info:
+  title: P-API
+  description: >
+    P-API provides access to multiple AI models for image generation,
+
+    video generation, and image-to-video transformation. The API supports both
+    asynchronous
+
+    and synchronous workflows:
+
+
+    **Asynchronous Workflow (default):**
+
+    1. **POST /v1/predictions** - Submit a generation request
+
+    2. **GET /v1/predictions/status/{id}** - Check prediction status and get
+    results
+
+    3. **GET /v1/predictions/delivery/{path}** - Download the generated content
+
+
+    **Synchronous Workflow (with Try-Sync header):**
+
+    1. **POST /v1/predictions** with `Try-Sync: true` header - Submit a
+    generation
+
+    request and wait up to 60 seconds for completion.
+
+
+    The API exposes 17 AI models across different categories:
+
+    - **Text-to-Image**: p-image, p-image-lora, flux-dev, flux-2-klein-4b,
+    wan-image-small, qwen-image, qwen-image-fast, z-image-turbo,
+    z-image-turbo-lora
+
+    - **Image Editing**: p-image-edit, p-image-edit-lora, qwen-image-edit-plus,
+    flux-dev-lora
+
+    - **Text-to-Video**: wan-t2v
+
+    - **Image-to-Video**: wan-i2v
+
+    - **Text-to-Video/Image-to-Video**: p-video
+
+    - **Video Generation/Editing**: vace
+
+
+    **LoRA Trainers:**
+
+    - **p-image-trainer**: Train custom LoRA models for p-image
+
+    - **p-image-edit-trainer**: Train custom LoRA models for p-image-edit
+
+
+    Trainers have a lower rate limit (5 requests/minute) and return training job
+    status.
+
+
+    For detailed model documentation, see:
+    https://docs.api.pruna.ai/guides/models
+
+
+    All requests require API key authentication via the `apikey` header.
+  version: 0.3.0
+  contact:
+    name: Pruna AI Support
+    email: support@pruna.ai
+servers:
+  - url: 'https://api.pruna.ai'
+    description: Production server
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: Predictions
+    description: Core prediction workflow operations
+  - name: Training
+    description: Train custom LoRA models
+  - name: File Management
+    description: Upload files to be used as input for predictions
+  - name: Content Delivery
+    description: Download generated content files
+externalDocs:
+  description: Model Documentation
+  url: 'https://docs.api.pruna.ai'
+paths:
+  /v1/predictions:
+    post:
+      summary: Submit a content generation request
+      description: >
+        Submit a request to generate images or videos using one of the
+
+        available AI models. This is the first step in the workflow.
+
+
+        The request will be queued for processing and you'll receive a
+        prediction
+
+        ID to track its status.
+
+
+        The model to use is specified via the `Model` header. The request body
+        structure
+
+        varies by model (see examples below).
+
+
+        If the `Try-Sync` header is set to true, the API will wait up to 60
+        seconds
+
+        for completion. If generation completes within this time, the response
+        will
+
+        include the final result directly.
+      operationId: createPrediction
+      x-microcks-operation:
+        dispatcher: HEADER
+        dispatcherRules: Model
+      tags:
+        - Predictions
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: Model
+          in: header
+          required: true
+          description: >-
+            The AI model to use for generation. Each model has specific
+            capabilities and input requirements.
+          schema:
+            type: string
+            enum:
+              - flux-dev
+              - flux-dev-lora
+              - flux-2-klein-4b
+              - wan-i2v
+              - wan-t2v
+              - wan-image-small
+              - qwen-image
+              - qwen-image-fast
+              - qwen-image-edit-plus
+              - vace
+              - p-image
+              - p-image-edit
+              - p-image-lora
+              - p-image-edit-lora
+              - z-image-turbo
+              - z-image-turbo-lora
+              - p-image-trainer
+              - p-image-edit-trainer
+        - name: Try-Sync
+          in: header
+          required: false
+          description: >-
+            If true, the API will wait up to 60 seconds for the generation to
+            complete.
+          schema:
+            type: boolean
+            default: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PredictionRequest'
+            examples:
+              flux-dev:
+                summary: flux-dev
+                description: Advanced text-to-image generation using Flux.1-dev base model.
+                value:
+                  input:
+                    prompt: A beautiful landscape with mountains and a lake at sunset
+                    speed_mode: "Juiced \U0001F525 (default)"
+                    num_inference_steps: 28
+                    guidance: 3.5
+                    seed: 42
+                    aspect_ratio: '16:9'
+                    image_size: 1024
+                    output_format: jpg
+                    output_quality: 80
+              flux-dev-lora:
+                summary: flux-dev-lora
+                description: >-
+                  Text-to-image and image-to-image generation with Flux.1-dev
+                  supporting custom LoRA weights.
+                value:
+                  input:
+                    lora: prithivMLmods/Flux-Long-Toon-LoRA
+                    seed: 42
+                    prompt: >-
+                      Long toons, a close-up of a cartoon character with a red
+                      backdrop
+                    guidance: 3
+                    lora_scale: 1
+                    megapixels: '1'
+                    speed_mode: "Extra Juiced \U0001F525"
+                    num_outputs: 1
+                    aspect_ratio: '1:1'
+                    output_format: jpg
+                    output_quality: 80
+                    prompt_strength: 0.8
+                    extra_lora_scale: 1
+                    num_inference_steps: 28
+              wan-i2v:
+                summary: wan-i2v
+                description: >-
+                  Transform static images into animated videos with text
+                  prompts.
+                value:
+                  input:
+                    image: 'https://api.pruna.ai/v1/files/abc123xyz789'
+                    prompt: >-
+                      Close-up shot of an elderly sailor wearing a yellow
+                      raincoat
+                    num_frames: 81
+                    resolution: 720p
+                    sample_shift: 12
+                    frames_per_second: 16
+                    interpolate_output: true
+                    lora_scale_transformer: 1
+                    lora_scale_transformer_2: 1
+              wan-t2v:
+                summary: wan-t2v
+                description: Generate videos directly from text prompts.
+                value:
+                  input:
+                    prompt: A sports car is driving very fast along a beach at sunset
+                    num_frames: 81
+                    resolution: 480p
+                    aspect_ratio: '16:9'
+                    sample_shift: 12
+                    optimize_prompt: false
+                    frames_per_second: 16
+                    interpolate_output: true
+                    lora_scale_transformer: 1
+                    lora_scale_transformer_2: 1
+              wan-image-small:
+                summary: wan-image-small
+                description: Fast image generation optimized for speed.
+                value:
+                  input:
+                    prompt: >-
+                      a cute cat sitting on a windowsill, soft lighting, cozy
+                      atmosphere
+                    juiced: false
+                    aspect_ratio: '16:9'
+                    seed: 42
+                    output_format: jpg
+                    output_quality: 80
+              qwen-image:
+                summary: qwen-image
+                description: >-
+                  High-quality text-to-image generation with optional LoRA
+                  weights.
+                value:
+                  input:
+                    prompt: >-
+                      Beautiful mountain landscape with a crystal clear lake
+                      reflecting the peaks
+                    enhance_prompt: false
+                    aspect_ratio: '16:9'
+                    image_size: optimize_for_quality
+                    go_fast: true
+                    num_inference_steps: 30
+                    guidance: 3
+                    seed: 42
+                    output_format: webp
+                    output_quality: 80
+                    negative_prompt: ' '
+                    disable_safety_checker: false
+              qwen-image-edit-plus:
+                summary: qwen-image-edit-plus
+                description: Edit images using text instructions.
+                value:
+                  input:
+                    prompt: Change the background to a beach sunset scene
+                    image:
+                      - 'https://api.pruna.ai/v1/files/abc123xyz789'
+                    aspect_ratio: '16:9'
+                    go_fast: true
+                    seed: 42
+                    output_format: webp
+                    output_quality: 95
+                    disable_safety_checker: false
+              vace:
+                summary: vace
+                description: >-
+                  Advanced video generation and editing with character reference
+                  images.
+                value:
+                  input:
+                    seed: -1
+                    size: 832*480
+                    prompt: A yellow car driving down a scenic mountain road at sunset
+                    frame_num: 81
+                    speed_mode: "Extra Juiced \U0001F680 (even more speed)"
+                    src_ref_images:
+                      - >-
+                        https://api.pruna.ai/pbxt/N323t5X69JB1MPD4w4cDIxK4rm0BG0W2JOWBrDrR4O9HTcyp/src_ref_image_1.png
+                    src_video: >-
+                      https://api.pruna.ai/pbxt/N323u1ljtNYyyaLrgw0ZLmXgepvWlBvxbJWi3sAa2VDPuNus/src_video.mp4
+                    sample_shift: 16
+                    sample_steps: 50
+                    sample_solver: unipc
+                    sample_guide_scale: 5
+              p-image:
+                summary: p-image
+                description: >-
+                  Ultra-fast text-to-image generation with automatic prompt
+                  enhancement.
+                value:
+                  input:
+                    prompt: A majestic lion standing on a rocky cliff at sunset
+                    aspect_ratio: '16:9'
+                    seed: 42
+                    disable_safety_checker: false
+              p-image-edit:
+                summary: p-image-edit
+                description: Edit and compose multiple images with text instructions.
+                value:
+                  input:
+                    prompt: Transform the subject into a watercolor painting style
+                    images:
+                      - 'https://api.pruna.ai/v1/files/abc123xyz789'
+                      - 'https://api.pruna.ai/v1/files/def456uvw012'
+                    aspect_ratio: '1:1'
+                    seed: 123
+                    disable_safety_checker: false
+              flux-2-klein-4b:
+                summary: flux-2-klein-4b
+                description: >-
+                  Lightweight and fast text-to-image generation using Flux Klein
+                  4B.
+                value:
+                  input:
+                    prompt: >-
+                      A serene mountain landscape at dawn with mist rolling
+                      through the valleys
+                    aspect_ratio: '16:9'
+                    seed: 42
+                    output_format: jpg
+                    output_quality: 80
+              p-image-lora:
+                summary: p-image-lora
+                description: >-
+                  Text-to-image generation with custom LoRA weights from
+                  HuggingFace.
+                value:
+                  input:
+                    prompt: A portrait in my custom artistic style
+                    lora_weights: huggingface.co/your-username/your-lora-repo
+                    lora_scale: 1
+                    aspect_ratio: '1:1'
+                    seed: 42
+              p-image-edit-lora:
+                summary: p-image-edit-lora
+                description: Image editing with custom LoRA weights from HuggingFace.
+                value:
+                  input:
+                    prompt: Apply my custom transformation to image 1
+                    images:
+                      - 'https://api.pruna.ai/v1/files/abc123xyz789'
+                    lora_weights: huggingface.co/your-username/your-edit-lora
+                    lora_scale: 1
+              p-image-trainer:
+                summary: p-image-trainer
+                description: Train custom LoRA weights for text-to-image generation.
+                value:
+                  input:
+                    image_data: 'https://your-storage.com/training_data.zip'
+                    steps: 1000
+                    training_type: balanced
+              p-image-edit-trainer:
+                summary: p-image-edit-trainer
+                description: Train custom LoRA weights for image editing transformations.
+                value:
+                  input:
+                    image_data: 'https://your-storage.com/edit_pairs.zip'
+                    steps: 1000
+                    default_caption: apply the trained transformation
+              qwen-image-fast:
+                summary: qwen-image-fast
+                description: Fast text-to-image generation optimized for speed.
+                value:
+                  input:
+                    prompt: >-
+                      A serene Japanese garden with cherry blossoms and a
+                      traditional wooden bridge
+                    aspect_ratio: '16:9'
+                    creativity: 0.62
+                    seed: 42
+              z-image-turbo:
+                summary: z-image-turbo
+                description: Ultra-fast text-to-image generation with Z-Image Turbo.
+                value:
+                  input:
+                    prompt: >-
+                      Sunset over mountain landscape, vibrant colors, dramatic
+                      clouds
+                    width: 1024
+                    height: 1024
+                    num_inference_steps: 8
+                    output_format: jpg
+                    seed: 42
+              z-image-turbo-lora:
+                summary: z-image-turbo-lora
+                description: >-
+                  Ultra-fast text-to-image generation with LoRA support for
+                  custom styles.
+                value:
+                  input:
+                    prompt: Portrait of a warrior in epic fantasy armor
+                    width: 1024
+                    height: 1024
+                    seed: 42
+      responses:
+        '201':
+          description: >-
+            Prediction request created successfully. Returns either an async
+            response with prediction ID (default) or a sync response with final
+            results (if Try-Sync=true and generation completes within 60
+            seconds).
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/PredictionResponse'
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - succeeded
+                        description: Generation completed successfully
+                      generation_url:
+                        type: string
+                        description: URL to download the generated content
+              examples:
+                flux-dev:
+                  summary: flux-dev response
+                  value:
+                    id: pred_fluxdev_001
+                    model: flux-dev
+                    input:
+                      prompt: >-
+                        A beautiful landscape with mountains and a lake at
+                        sunset
+                      speed_mode: "Juiced \U0001F525 (default)"
+                      num_inference_steps: 28
+                      guidance: 3.5
+                      seed: 42
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_fluxdev_001
+                flux-dev-lora:
+                  summary: flux-dev-lora response
+                  value:
+                    id: pred_fluxdevlora_001
+                    model: flux-dev-lora
+                    input:
+                      prompt: 'Long toons, a close-up of a cartoon character'
+                      lora: prithivMLmods/Flux-Long-Toon-LoRA
+                      num_inference_steps: 28
+                      guidance: 3
+                      seed: 42
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_fluxdevlora_001
+                wan-i2v:
+                  summary: wan-i2v response
+                  value:
+                    id: pred_wani2v_001
+                    model: wan-i2v
+                    input:
+                      prompt: >-
+                        Close-up shot of an elderly sailor wearing a yellow
+                        raincoat
+                      image: 'https://api.pruna.ai/v1/files/abc123xyz789'
+                      num_frames: 81
+                      resolution: 480p
+                    get_url: 'https://api.pruna.ai/v1/predictions/status/pred_wani2v_001'
+                wan-t2v:
+                  summary: wan-t2v response
+                  value:
+                    id: pred_want2v_001
+                    model: wan-t2v
+                    input:
+                      prompt: A sports car driving along a beach at sunset
+                      num_frames: 81
+                      resolution: 480p
+                      aspect_ratio: '16:9'
+                    get_url: 'https://api.pruna.ai/v1/predictions/status/pred_want2v_001'
+                wan-image-small:
+                  summary: wan-image-small response
+                  value:
+                    id: pred_wanimagesmall_001
+                    model: wan-image-small
+                    input:
+                      prompt: A cute cat sitting on a windowsill
+                      aspect_ratio: '16:9'
+                      seed: 42
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_wanimagesmall_001
+                qwen-image:
+                  summary: qwen-image response
+                  value:
+                    id: pred_qwenimage_001
+                    model: qwen-image
+                    input:
+                      prompt: Beautiful mountain landscape with a crystal clear lake
+                      num_inference_steps: 30
+                      guidance: 3
+                      seed: 42
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_qwenimage_001
+                qwen-image-edit-plus:
+                  summary: qwen-image-edit-plus response
+                  value:
+                    id: pred_qwenimageeditplus_001
+                    model: qwen-image-edit-plus
+                    input:
+                      prompt: Change the background to a beach sunset scene
+                      image:
+                        - 'https://api.pruna.ai/v1/files/abc123xyz789'
+                      seed: 42
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_qwenimageeditplus_001
+                vace:
+                  summary: vace response
+                  value:
+                    id: pred_vace_001
+                    model: vace
+                    input:
+                      prompt: A yellow car driving down a scenic mountain road
+                      frame_num: 81
+                      sample_guide_scale: 5
+                      sample_shift: 16
+                      sample_solver: unipc
+                      sample_steps: 50
+                      seed: -1
+                      size: 832*480
+                      speed_mode: "Extra Juiced \U0001F680 (even more speed)"
+                      src_ref_images:
+                        - >-
+                          https://api.pruna.ai/pbxt/N323t5X69JB1MPD4w4cDIxK4rm0BG0W2JOWBrDrR4O9HTcyp/src_ref_image_1.png
+                      src_video: >-
+                        https://api.pruna.ai/pbxt/N323u1ljtNYyyaLrgw0ZLmXgepvWlBvxbJWi3sAa2VDPuNus/src_video.mp4
+                    get_url: 'https://api.pruna.ai/v1/predictions/status/pred_vace_001'
+                p-image:
+                  summary: p-image response
+                  value:
+                    id: pred_pimage_001
+                    model: p-image
+                    input:
+                      prompt: A majestic lion standing on a rocky cliff at sunset
+                      aspect_ratio: '16:9'
+                      seed: 42
+                    get_url: 'https://api.pruna.ai/v1/predictions/status/pred_pimage_001'
+                p-image-edit:
+                  summary: p-image-edit response
+                  value:
+                    id: pred_pimageedit_001
+                    model: p-image-edit
+                    input:
+                      prompt: Transform the subject into a watercolor painting style
+                      images:
+                        - 'https://api.pruna.ai/v1/files/abc123xyz789'
+                      aspect_ratio: '1:1'
+                      seed: 123
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_pimageedit_001
+                flux-2-klein-4b:
+                  summary: flux-2-klein-4b response
+                  value:
+                    id: pred_flux2klein4b_001
+                    model: flux-2-klein-4b
+                    input:
+                      prompt: >-
+                        A serene mountain landscape at dawn with mist rolling
+                        through the valleys
+                      aspect_ratio: '16:9'
+                      seed: 42
+                      output_format: jpg
+                      output_quality: 80
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_flux2klein4b_001
+                p-image-lora:
+                  summary: p-image-lora response
+                  value:
+                    id: pred_pimagelora_001
+                    model: p-image-lora
+                    input:
+                      prompt: A portrait in my custom artistic style
+                      lora_weights: huggingface.co/your-username/your-lora-repo
+                      lora_scale: 1
+                      aspect_ratio: '1:1'
+                      seed: 42
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_pimagelora_001
+                p-image-edit-lora:
+                  summary: p-image-edit-lora response
+                  value:
+                    id: pred_pimageeditlora_001
+                    model: p-image-edit-lora
+                    input:
+                      prompt: Apply my custom transformation to image 1
+                      images:
+                        - 'https://api.pruna.ai/v1/files/abc123xyz789'
+                      lora_weights: huggingface.co/your-username/your-edit-lora
+                      lora_scale: 1
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_pimageeditlora_001
+                p-image-trainer:
+                  summary: p-image-trainer response
+                  value:
+                    id: pred_pimagetrainer_001
+                    model: p-image-trainer
+                    input:
+                      image_data: 'https://your-storage.com/training_data.zip'
+                      steps: 1000
+                      training_type: balanced
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_pimagetrainer_001
+                p-image-edit-trainer:
+                  summary: p-image-edit-trainer response
+                  value:
+                    id: pred_pimageedittrainer_001
+                    model: p-image-edit-trainer
+                    input:
+                      image_data: 'https://your-storage.com/edit_pairs.zip'
+                      steps: 1000
+                      default_caption: apply the trained transformation
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_pimageedittrainer_001
+                qwen-image-fast:
+                  summary: qwen-image-fast response
+                  value:
+                    id: pred_qwenimagefast_001
+                    model: qwen-image-fast
+                    input:
+                      prompt: >-
+                        A serene Japanese garden with cherry blossoms and a
+                        traditional wooden bridge
+                      aspect_ratio: '16:9'
+                      creativity: 0.62
+                      seed: 42
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_qwenimagefast_001
+                z-image-turbo:
+                  summary: z-image-turbo response
+                  value:
+                    id: pred_zimageturbo_001
+                    model: z-image-turbo
+                    input:
+                      prompt: >-
+                        Sunset over mountain landscape, vibrant colors, dramatic
+                        clouds
+                      width: 1024
+                      height: 1024
+                      num_inference_steps: 8
+                      output_format: jpg
+                      seed: 42
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_zimageturbo_001
+                z-image-turbo-lora:
+                  summary: z-image-turbo-lora response
+                  value:
+                    id: pred_zimageturbolora_001
+                    model: z-image-turbo-lora
+                    input:
+                      prompt: Portrait of a warrior in epic fantasy armor
+                      width: 1024
+                      height: 1024
+                      seed: 42
+                    get_url: >-
+                      https://api.pruna.ai/v1/predictions/status/pred_zimageturbolora_001
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  '/v1/predictions/status/{id}':
+    get:
+      summary: Get prediction status
+      description: >
+        Check the status of a prediction request. This is the second step
+
+        in the asynchronous workflow.
+
+
+        When the prediction is completed successfully, the response will include
+        download
+
+        URLs for the generated content (images or videos).
+
+
+        Rate limit: 30,000 requests per minute.
+      operationId: getPredictionStatus
+      tags:
+        - Predictions
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The prediction ID returned from the initial request
+          schema:
+            type: string
+            example: 1knpbkf075rme0csjqr987hg4w
+      responses:
+        '200':
+          description: Prediction status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PredictionStatusResponse'
+              examples:
+                processing:
+                  summary: Prediction in progress
+                  value:
+                    status: processing
+                    message: Generation in progress
+                starting:
+                  summary: Prediction starting
+                  value:
+                    status: starting
+                    message: Generation in progress
+                completed:
+                  summary: Prediction completed successfully
+                  value:
+                    status: succeeded
+                    generation_url: >-
+                      https://api.pruna.ai/v1/predictions/delivery/xezq/52UGYRrRfqViaKmvYsEnENTh0qLDAWHptQ8jOnEHu7XC6AtKA/output.mp4
+                canceled:
+                  summary: Prediction was canceled
+                  value:
+                    status: canceled
+                    message: Prediction was canceled
+                failed:
+                  summary: Prediction failed during processing
+                  value:
+                    status: failed
+                    message: Prediction failed
+                    error: 'Number of samples, -5, must be non-negative.'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  '/v1/predictions/delivery/{path}':
+    get:
+      summary: Download generated content
+      description: >
+        Download the generated content file. This is the third and final
+
+        step in the workflow.
+
+
+        Use the `generation_url` from the prediction status response directly -
+        no path extraction needed.
+
+        Simply make a GET request to that URL with your API key.
+
+
+        Rate limit: 10,000 requests per minute.
+      operationId: downloadContent
+      tags:
+        - Content Delivery
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: path
+          in: path
+          required: true
+          description: The delivery path returned in the prediction status response
+          schema:
+            type: string
+            example: >-
+              xezq/52UGYRrRfqViaKmvYsEnENTh0qLDAWHptQ8jOnEHu7XC6AtKA/output_42_0.jpeg
+      responses:
+        '200':
+          description: Content file downloaded successfully
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+                description: Generated image file
+            image/png:
+              schema:
+                type: string
+                format: binary
+                description: Generated image file
+            image/webp:
+              schema:
+                type: string
+                format: binary
+                description: Generated image file
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+                description: Generated video file
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: Generated content file
+          headers:
+            Content-Type:
+              description: The MIME type of the generated content
+              schema:
+                type: string
+              example: image/jpeg
+            Content-Length:
+              description: The size of the file in bytes
+              schema:
+                type: integer
+              example: 2048576
+            Content-Disposition:
+              description: Suggested filename for download
+              schema:
+                type: string
+              example: attachment; filename="output_42_0.jpeg"
+            Cache-Control:
+              description: Caching directives
+              schema:
+                type: string
+              example: 'public, max-age=3600'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: Content expired or no longer available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: CONTENT_EXPIRED
+                  message: The requested content has expired and is no longer available
+                  details: Generated content is available for 24 hours after creation
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /v1/files:
+    post:
+      summary: Upload a file
+      description: >
+        Upload a file (image or video) to be used as input for predictions.
+
+        The uploaded file will be stored temporarily and can be referenced in
+        prediction
+
+        requests by its URL.
+
+
+        Uploaded files are available for 30 minutes after upload
+
+        and are automatically deleted after expiration. Use the returned URL in
+
+        your prediction input fields that accept file URLs.
+
+
+        **Rate limit:** 10000 requests per minute
+
+
+        **Example with curl:**
+
+        ```bash
+
+        curl -X POST "https://api.pruna.ai/v1/files" \
+          -H "apikey: YOUR_API_KEY" \
+          -F "content=@/path/to/your/file.jpg"
+        ```
+
+
+        Note: Use `-F` (form) with `@` prefix to upload a file from your local
+        filesystem.
+      operationId: uploadFile
+      tags:
+        - File Management
+      security:
+        - ApiKeyAuth: []
+      x-codeSamples:
+        - lang: Shell
+          label: cURL
+          source: |
+            curl -X POST "https://api.pruna.ai/v1/files" \
+              -H "apikey: YOUR_API_KEY" \
+              -F "content=@/path/to/your/file.jpg"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  format: binary
+                  description: The file to upload (image or video)
+      responses:
+        '201':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileUploadResponse'
+              example:
+                id: fqadqq42xq
+                name: test.jpg
+                content_type: image/jpeg
+                size: 185093
+                etag: '"14e9a51deaac6bee2dd8b5c52d7d0b5f"'
+                checksums:
+                  sha256: >-
+                    aa10d5d09bcee5cb5d854bd81899308b0cf0c0c50e29d4f00c2c06e51f0e2fe6
+                metadata:
+                  content_length: 185093
+                  width: 1344
+                  height: 768
+                created_at: '2025-01-08T18:51:26.729Z'
+                expires_at: '2025-01-09T18:51:26.729Z'
+                urls:
+                  get: 'https://api.pruna.ai/v1/files/fqadqq42xq'
+        '400':
+          description: Invalid file or missing content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: INVALID_FILE
+                  message: The uploaded file is invalid or missing
+                  details: Please provide a valid image or video file
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: FILE_TOO_LARGE
+                  message: The uploaded file exceeds the maximum size limit
+                  details: Maximum file size is 100MB
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: apikey
+      description: |
+        API key for authentication. You can obtain your API key from the
+        Pruna AI dashboard.
+
+        Include it in the `apikey` header for all requests.
+  schemas:
+    PredictionRequest:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          description: Model-specific input parameters
+          additionalProperties: true
+    PredictionResponse:
+      type: object
+      required:
+        - id
+        - model
+        - input
+        - get_url
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the prediction
+          example: 1zww7deyssrme0csqwr90phzzr
+        model:
+          type: string
+          description: Model identifier used for this prediction
+          example: vace
+        input:
+          type: object
+          description: The input parameters provided for this prediction
+          additionalProperties: true
+        get_url:
+          type: string
+          format: uri
+          description: URL to check prediction status
+          example: >-
+            https://api.pruna.ai/v1/predictions/status/1zww7deyssrme0csqwr90phzzr
+    PredictionStatusResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: Current status of the prediction
+          enum:
+            - starting
+            - processing
+            - succeeded
+            - failed
+            - canceled
+          example: processing
+        generation_url:
+          type: string
+          description: >-
+            URL to download the generated content (available when status is
+            'succeeded')
+          example: >-
+            https://api.pruna.ai/v1/predictions/delivery/xezq/52UGYRrRfqViaKmvYsEnENTh0qLDAWHptQ8jOnEHu7XC6AtKA/output.mp4
+        message:
+          type: string
+          description: Status message
+          example: Generation in progress
+        error:
+          type: string
+          description: Error details (available when status is 'failed')
+          example: 'Number of samples, -5, must be non-negative.'
+    PredictionStatus:
+      type: string
+      enum:
+        - starting
+        - processing
+        - succeeded
+        - failed
+        - canceled
+      description: |
+        Current status of the prediction:
+
+        - `starting`: Prediction is being queued
+        - `processing`: Model is generating content
+        - `succeeded`: Content generated successfully
+        - `failed`: Prediction failed with error
+        - `canceled`: Prediction was canceled by user
+    OutputFile:
+      type: object
+      required:
+        - url
+        - filename
+        - content_type
+      properties:
+        url:
+          type: string
+          description: Relative URL path for downloading the generated content file
+          example: >-
+            /v1/predictions/delivery/xezq/52UGYRrRfqViaKmvYsEnENTh0qLDAWHptQ8jOnEHu7XC6AtKA/output.mp4
+        filename:
+          type: string
+          description: Filename of the generated content
+          example: output.mp4
+        content_type:
+          type: string
+          description: 'MIME type of the generated content (e.g., image/jpeg, video/mp4)'
+          example: video/mp4
+        size:
+          type: integer
+          description: File size in bytes
+          example: 15728640
+    PredictionError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Error code for programmatic handling
+          enum:
+            - INVALID_INPUT
+            - MODEL_ERROR
+            - TIMEOUT
+            - QUOTA_EXCEEDED
+            - INTERNAL_ERROR
+          example: INVALID_INPUT
+        message:
+          type: string
+          description: Human-readable error message
+          example: 'Invalid prompt: prompt too long'
+        details:
+          type: string
+          description: Additional error details
+          example: Prompt must be less than 1000 characters
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+            message:
+              type: string
+              description: Human-readable error message
+            details:
+              type: string
+              description: Additional error context
+        request_id:
+          type: string
+          description: Unique request identifier for debugging
+          example: req_1234567890
+    FileUploadResponse:
+      type: object
+      required:
+        - id
+        - name
+        - content_type
+        - size
+        - created_at
+        - expires_at
+        - urls
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the uploaded file
+          example: fqadqq42xq
+        name:
+          type: string
+          description: Original filename
+          example: test.jpg
+        content_type:
+          type: string
+          description: MIME type of the uploaded file
+          example: image/jpeg
+        size:
+          type: integer
+          description: File size in bytes
+          example: 185093
+        etag:
+          type: string
+          description: Entity tag for cache validation
+          example: '"14e9a51deaac6bee2dd8b5c52d7d0b5f"'
+        checksums:
+          type: object
+          description: File integrity checksums
+          properties:
+            sha256:
+              type: string
+              description: SHA-256 hash of the file content
+              example: aa10d5d09bcee5cb5d854bd81899308b0cf0c0c50e29d4f00c2c06e51f0e2fe6
+        metadata:
+          type: object
+          description: Additional file metadata (varies by file type)
+          properties:
+            content_length:
+              type: integer
+              description: Content length in bytes
+              example: 185093
+            width:
+              type: integer
+              description: Image width in pixels (for images only)
+              example: 1344
+            height:
+              type: integer
+              description: Image height in pixels (for images only)
+              example: 768
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the file was uploaded
+          example: '2025-01-08T18:51:26.729Z'
+        expires_at:
+          type: string
+          format: date-time
+          description: Timestamp when the file will expire and be deleted
+          example: '2025-01-09T18:51:26.729Z'
+        urls:
+          type: object
+          description: URLs to access the uploaded file
+          required:
+            - get
+          properties:
+            get:
+              type: string
+              format: uri
+              description: >-
+                URL to retrieve the file. Use this URL in prediction input
+                fields that accept file URLs.
+              example: 'https://api.pruna.ai/v1/files/fqadqq42xq'
+    flux-dev:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              default: -1
+              description: Random seed for reproducible generation. Use -1 for random.
+              type: integer
+            prompt:
+              title: Prompt
+              description: Text description of the image to generate.
+              type: string
+            guidance:
+              title: Guidance
+              default: 3.5
+              description: Guidance scale - higher values follow the prompt more closely.
+              type: number
+            image_size:
+              title: Image Size
+              default: 1024
+              description: Base image size (longest side)
+              type: integer
+            speed_mode:
+              enum:
+                - "Lightly Juiced \U0001F34A (more consistent)"
+                - "Juiced \U0001F525 (default)"
+                - "Extra Juiced \U0001F525 (more speed)"
+                - "Blink of an eye \U0001F441️"
+              title: speed_mode
+              description: Speed optimization level
+              default: "Extra Juiced \U0001F525 (more speed)"
+              type: string
+            aspect_ratio:
+              enum:
+                - '1:1'
+                - '16:9'
+                - '21:9'
+                - '3:2'
+                - '2:3'
+                - '4:5'
+                - '5:4'
+                - '3:4'
+                - '4:3'
+                - '9:16'
+                - '9:21'
+              title: aspect_ratio
+              description: Aspect ratio of the output image
+              default: '1:1'
+              type: string
+            output_format:
+              enum:
+                - png
+                - jpg
+                - webp
+              title: output_format
+              description: Output format
+              default: jpg
+              type: string
+            output_quality:
+              title: Output Quality
+              default: 80
+              maximum: 100
+              minimum: 1
+              description: Output quality (for jpg and webp)
+              type: integer
+            num_inference_steps:
+              title: Num Inference Steps
+              default: 28
+              description: Number of inference steps
+              type: integer
+          required:
+            - prompt
+          additionalProperties: false
+      description: 'AI model for content generation. Rate limit: 150 requests per minute.'
+    flux-dev-lora:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            lora:
+              title: Lora
+              description: >-
+                Load LoRA weights. Supports HuggingFace URLs in the format
+                <owner>/<model-name>[/<lora-weights-file.safetensors>]. For
+                example, 'fofr/flux-pixar-cars'.
+              type: string
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation
+              type: integer
+            image:
+              title: Image
+              format: uri
+              description: >-
+                Input image for image to image mode. The aspect ratio of your
+                output will match this image
+              type: string
+            prompt:
+              title: Prompt
+              description: Prompt for generated image
+              type: string
+            guidance:
+              title: Guidance
+              default: 3
+              maximum: 10
+              minimum: 0
+              description: Guidance for generated image
+              type: number
+            extra_lora:
+              title: Extra Lora
+              description: >-
+                Load LoRA weights. Supports HuggingFace URLs in the format
+                <owner>/<model-name>[/<lora-weights-file.safetensors>]. For
+                example, 'fofr/flux-pixar-cars'.
+              type: string
+            lora_scale:
+              title: Lora Scale
+              default: 1
+              maximum: 3
+              minimum: -1
+              description: >-
+                Determines how strongly the main LoRA should be applied. Sane
+                results between 0 and 1 for base inference. For go_fast we apply
+                a 1.5x multiplier to this value; we've generally seen good
+                performance when scaling the base value by that amount. You may
+                still need to experiment to find the best value for your
+                particular lora.
+              type: number
+            megapixels:
+              enum:
+                - '1'
+                - '0.25'
+              title: megapixels
+              description: Approximate number of megapixels for generated image
+              default: '1'
+              type: string
+            speed_mode:
+              enum:
+                - Base Model (compiled)
+                - "Lightly Juiced \U0001F34A"
+                - "Juiced \U0001F9C3"
+                - "Extra Juiced \U0001F525"
+              title: speed_mode
+              description: Speed optimization level
+              default: "Juiced \U0001F9C3"
+              type: string
+            num_outputs:
+              title: Num Outputs
+              default: 1
+              maximum: 4
+              minimum: 1
+              description: Number of outputs to generate
+              type: integer
+            aspect_ratio:
+              enum:
+                - '1:1'
+                - '16:9'
+                - '21:9'
+                - '3:2'
+                - '2:3'
+                - '4:5'
+                - '5:4'
+                - '3:4'
+                - '4:3'
+                - '9:16'
+                - '9:21'
+              title: aspect_ratio
+              description: Aspect ratio of the output image
+              default: '1:1'
+              type: string
+            output_format:
+              enum:
+                - png
+                - jpg
+                - webp
+              title: output_format
+              description: Format of the output images
+              default: jpg
+              type: string
+            output_quality:
+              title: Output Quality
+              default: 80
+              maximum: 100
+              minimum: 1
+              description: >-
+                Quality when saving the output images, from 0 to 100. 100 is
+                best quality, 0 is lowest quality. Not relevant for .png outputs
+              type: integer
+            prompt_strength:
+              title: Prompt Strength
+              default: 0.8
+              maximum: 1
+              minimum: 0
+              description: >-
+                Prompt strength when using img2img. 1.0 corresponds to full
+                destruction of information in image
+              type: number
+            extra_lora_scale:
+              title: Extra Lora Scale
+              default: 1
+              maximum: 3
+              minimum: -1
+              description: >-
+                Determines how strongly the extra LoRA should be applied. Sane
+                results between 0 and 1 for base inference. For go_fast we apply
+                a 1.5x multiplier to this value; we've generally seen good
+                performance when scaling the base value by that amount. You may
+                still need to experiment to find the best value for your
+                particular lora.
+              type: number
+            num_inference_steps:
+              title: Num Inference Steps
+              default: 28
+              description: >-
+                Number of denoising steps. Recommended range is 28-50, and lower
+                number of steps produce lower quality outputs, faster.
+              type: integer
+          required:
+            - prompt
+          additionalProperties: false
+      description: 'AI model for content generation. Rate limit: 150 requests per minute.'
+    flux-2-klein-4b:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation
+              type: integer
+            images:
+              items:
+                type: string
+                format: uri
+              title: Images
+              default: []
+              description: >-
+                List of input images for image-to-image generation. Maximum 5
+                images. Must be jpeg, png, gif, or webp.
+              type: array
+            prompt:
+              title: Prompt
+              description: Text prompt for image generation.
+              type: string
+            go_fast:
+              title: Go Fast
+              default: false
+              description: Run faster predictions with additional optimizations.
+              type: boolean
+            aspect_ratio:
+              enum:
+                - '1:1'
+                - '16:9'
+                - '9:16'
+                - '3:2'
+                - '2:3'
+                - '4:3'
+                - '3:4'
+                - '5:4'
+                - '4:5'
+                - '21:9'
+                - '9:21'
+                - match_input_image
+              title: aspect_ratio
+              description: >-
+                Aspect ratio for the generated image. Use 'match_input_image' to
+                match the aspect ratio of the first input image.
+              default: '1:1'
+              type: string
+            output_format:
+              enum:
+                - webp
+                - jpg
+                - png
+              title: output_format
+              description: Format of the output images
+              default: jpg
+              type: string
+            output_quality:
+              title: Output Quality
+              default: 95
+              maximum: 100
+              minimum: 0
+              description: >-
+                Quality when saving the output images, from 0 to 100. 100 is
+                best quality, 0 is lowest quality. Not relevant for .png
+                outputs.
+              type: integer
+            output_megapixels:
+              enum:
+                - '0.25'
+                - '0.5'
+                - '1'
+                - '2'
+                - '4'
+              title: output_megapixels
+              description: Resolution of the output image in megapixels
+              default: '1'
+              type: string
+            disable_safety_checker:
+              title: Disable Safety Checker
+              default: false
+              description: Disable safety checker for generated images.
+              type: boolean
+          required:
+            - prompt
+          additionalProperties: false
+      description: 'AI model for content generation. Rate limit: 150 requests per minute.'
+    wan-i2v:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Leave blank for random
+              type: integer
+            image:
+              title: Image
+              format: uri
+              description: Input image to generate video from.
+              type: string
+            prompt:
+              title: Prompt
+              description: Prompt for video generation
+              type: string
+            go_fast:
+              title: Go Fast
+              default: true
+              description: Enable speed optimizations for faster video generation.
+              type: boolean
+            last_image:
+              title: Last Image
+              format: uri
+              description: >-
+                Optional last image to condition the video generation. If
+                provided, creates smoother transitions between frames.
+              type: string
+            num_frames:
+              title: Num Frames
+              default: 81
+              maximum: 121
+              minimum: 81
+              description: Number of video frames. 81 frames give the best results
+              type: integer
+            resolution:
+              enum:
+                - 480p
+                - 720p
+              title: resolution
+              description: >-
+                Resolution of video. 16:9 corresponds to 832x480px, and 9:16 is
+                480x832px
+              default: 480p
+              type: string
+            sample_shift:
+              title: Sample Shift
+              default: 12
+              maximum: 20
+              minimum: 1
+              description: Sample shift factor
+              type: number
+            frames_per_second:
+              title: Frames Per Second
+              default: 16
+              maximum: 30
+              minimum: 5
+              description: >-
+                Frames per second. Note that the pricing of this model is based
+                on the video duration at 16 fps
+              type: integer
+            interpolate_output:
+              title: Interpolate Output
+              default: false
+              description: Interpolate the generated video to 30 FPS using ffmpeg
+              type: boolean
+            disable_safety_checker:
+              title: Disable Safety Checker
+              default: false
+              description: Disable safety checker for generated video.
+              type: boolean
+            lora_scale_transformer:
+              title: Lora Scale Transformer
+              default: 1
+              description: Determines how strongly the transformer LoRA should be applied.
+              type: number
+            lora_scale_transformer_2:
+              title: Lora Scale Transformer 2
+              default: 1
+              description: >-
+                Determines how strongly the transformer_2 LoRA should be
+                applied.
+              type: number
+            lora_weights_transformer:
+              title: Lora Weights Transformer
+              description: >-
+                Load LoRA weights for the HIGH transformer. Supports arbitrary
+                .safetensors URLs from the Internet (for example,
+                'https://huggingface.co/TheRaf7/instagirl-v2/resolve/main/Instagirlv2.0_hinoise.safetensors')
+              type: string
+            lora_weights_transformer_2:
+              title: Lora Weights Transformer 2
+              description: >-
+                Load LoRA weights for the LOW transformer_2. Supports arbitrary
+                .safetensors URLs from the Internet. Can be different from
+                transformer LoRA. (for example,
+                'https://huggingface.co/TheRaf7/instagirl-v2/resolve/main/Instagirlv2.0_lownoise.safetensors')
+              type: string
+          required:
+            - prompt
+            - image
+          additionalProperties: false
+      description: >-
+        AI model based on wan image to video for video generation. Rate limit:
+        30 requests per minute.
+    wan-t2v:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Leave blank for random
+              type: integer
+            prompt:
+              title: Prompt
+              description: Prompt for video generation
+              type: string
+            go_fast:
+              title: Go Fast
+              default: true
+              description: Go fast
+              type: boolean
+            num_frames:
+              title: Num Frames
+              default: 81
+              maximum: 121
+              minimum: 81
+              description: Number of video frames. 81 frames give the best results
+              type: integer
+            resolution:
+              enum:
+                - 480p
+                - 720p
+              title: resolution
+              description: >-
+                Resolution of video. 16:9 corresponds to 832x480px, and 9:16 is
+                480x832px
+              default: 480p
+              type: string
+            aspect_ratio:
+              enum:
+                - '16:9'
+                - '9:16'
+              title: aspect_ratio
+              description: >-
+                Aspect ratio of video. 16:9 corresponds to 832x480px, and 9:16
+                is 480x832px
+              default: '16:9'
+              type: string
+            sample_shift:
+              title: Sample Shift
+              default: 12
+              maximum: 20
+              minimum: 1
+              description: Sample shift factor
+              type: number
+            optimize_prompt:
+              title: Optimize Prompt
+              default: false
+              description: Translate prompt to Chinese before generation
+              type: boolean
+            frames_per_second:
+              title: Frames Per Second
+              default: 16
+              maximum: 30
+              minimum: 5
+              description: >-
+                Frames per second. Note that the pricing of this model is based
+                on the video duration at 16 fps
+              type: integer
+            interpolate_output:
+              title: Interpolate Output
+              default: true
+              description: Interpolate the generated video to 30 FPS using ffmpeg
+              type: boolean
+            disable_safety_checker:
+              title: Disable Safety Checker
+              default: false
+              description: Disable safety checker for generated video.
+              type: boolean
+            lora_scale_transformer:
+              title: Lora Scale Transformer
+              default: 1
+              description: Determines how strongly the transformer LoRA should be applied.
+              type: number
+            lora_scale_transformer_2:
+              title: Lora Scale Transformer 2
+              default: 1
+              description: >-
+                Determines how strongly the transformer_2 LoRA should be
+                applied.
+              type: number
+            lora_weights_transformer:
+              title: Lora Weights Transformer
+              description: >-
+                Load LoRA weights for transformer. Supports arbitrary
+                .safetensors URLs from the Internet (for example,
+                'https://huggingface.co/Viktor1717/scandinavian-interior-style1/resolve/main/my_first_flux_lora_v1.safetensors')
+              type: string
+            lora_weights_transformer_2:
+              title: Lora Weights Transformer 2
+              description: >-
+                Load LoRA weights for transformer_2. Supports arbitrary
+                .safetensors URLs from the Internet. Can be different from
+                transformer LoRA.
+              type: string
+          required:
+            - prompt
+          additionalProperties: false
+      description: 'AI model for video generation. Rate limit: 30 requests per minute.'
+    wan-image-small:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation
+              type: integer
+            width:
+              title: Width
+              maximum: 900
+              minimum: 256
+              description: >-
+                Width of the generated image. Only used when
+                aspect_ratio=custom. Must be a multiple of 16.
+              type: integer
+            height:
+              title: Height
+              maximum: 900
+              minimum: 256
+              description: >-
+                Height of the generated image. Only used when
+                aspect_ratio=custom. Must be a multiple of 16.
+              type: integer
+            juiced:
+              title: Juiced
+              default: false
+              description: Faster inference with additional optimizations.
+              type: boolean
+            prompt:
+              title: Prompt
+              description: Text prompt for image generation
+              type: string
+            num_outputs:
+              title: Num Outputs
+              default: 1
+              maximum: 4
+              minimum: 1
+              description: Number of outputs to generate
+              type: integer
+            aspect_ratio:
+              enum:
+                - custom
+                - '1:1'
+                - '16:9'
+                - '9:16'
+                - '4:3'
+                - '3:4'
+                - '21:9'
+              title: aspect_ratio
+              description: Aspect ratio for the generated image
+              default: '16:9'
+              type: string
+            output_format:
+              enum:
+                - png
+                - jpg
+                - webp
+              title: output_format
+              description: Format of the output images
+              default: jpg
+              type: string
+            output_quality:
+              title: Output Quality
+              default: 80
+              maximum: 100
+              minimum: 1
+              description: >-
+                Quality when saving the output images, from 0 to 100. 100 is
+                best quality, 0 is lowest quality. Not relevant for .png outputs
+              type: integer
+          required:
+            - prompt
+          additionalProperties: false
+      description: >-
+        AI model for image (not video) generation. Rate limit: 150 requests per
+        minute.
+    qwen-image:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation
+              type: integer
+            image:
+              title: Image
+              format: uri
+              description: Input image for img2img pipeline
+              type: string
+            prompt:
+              title: Prompt
+              description: Prompt for generated image
+              type: string
+            go_fast:
+              title: Go Fast
+              default: true
+              description: Run faster predictions with additional optimizations.
+              type: boolean
+            guidance:
+              title: Guidance
+              default: 3
+              maximum: 10
+              minimum: 0
+              description: >-
+                Guidance for generated image. Lower values can give more
+                realistic images. Good values to try are 2, 2.5, 3 and 3.5
+              type: number
+            strength:
+              title: Strength
+              default: 0.9
+              maximum: 1
+              minimum: 0
+              description: Strength for img2img pipeline
+              type: number
+            image_size:
+              enum:
+                - optimize_for_quality
+                - optimize_for_speed
+              title: image_size
+              description: Image size for the generated image
+              default: optimize_for_quality
+              type: string
+            lora_scale:
+              title: Lora Scale
+              default: 1
+              description: Determines how strongly the main LoRA should be applied.
+              type: number
+            aspect_ratio:
+              enum:
+                - '1:1'
+                - '16:9'
+                - '9:16'
+                - '4:3'
+                - '3:4'
+                - '3:2'
+                - '2:3'
+              title: aspect_ratio
+              description: Aspect ratio for the generated image
+              default: '16:9'
+              type: string
+            lora_weights:
+              title: Lora Weights
+              description: >-
+                Load LoRA weights. Only works with text to image pipeline.
+                Supports arbitrary .safetensors URLs, tar files, and zip files
+                from the Internet (for example,
+                'https://huggingface.co/flymy-ai/qwen-image-lora/resolve/main/pytorch_lora_weights.safetensors',
+                'https://example.com/lora_weights.tar.gz', or
+                'https://example.com/lora_weights.zip')
+              type: string
+            output_format:
+              enum:
+                - webp
+                - jpg
+                - png
+              title: output_format
+              description: Format of the output images
+              default: webp
+              type: string
+            enhance_prompt:
+              title: Enhance Prompt
+              default: false
+              description: Enhance the prompt with positive magic.
+              type: boolean
+            output_quality:
+              title: Output Quality
+              default: 80
+              maximum: 100
+              minimum: 0
+              description: >-
+                Quality when saving the output images, from 0 to 100. 100 is
+                best quality, 0 is lowest quality. Not relevant for .png outputs
+              type: integer
+            negative_prompt:
+              title: Negative Prompt
+              default: ' '
+              description: Negative prompt for generated image
+              type: string
+            extra_lora_scale:
+              items:
+                type: number
+              title: Extra Lora Scale
+              description: >-
+                Scales for additional LoRAs as an array of numbers (e.g., 0.5,
+                0.7). Must match the number of weights in extra_lora_weights.
+              type: array
+            extra_lora_weights:
+              items:
+                type: string
+              title: Extra Lora Weights
+              description: >-
+                Additional LoRA weights as an array of URLs. Same formats
+                supported as lora_weights (e.g.,
+                ['https://huggingface.co/flymy-ai/qwen-image-lora/resolve/main/pytorch_lora_weights.safetensors',
+                'https://huggingface.co/flymy-ai/qwen-image-realism-lora/resolve/main/flymy_realism.safetensors'])
+              type: array
+            num_inference_steps:
+              title: Num Inference Steps
+              default: 30
+              maximum: 50
+              minimum: 1
+              description: >-
+                Number of denoising steps. Recommended range is 28-50, and lower
+                number of steps produce lower quality outputs, faster.
+              type: integer
+            disable_safety_checker:
+              title: Disable Safety Checker
+              default: false
+              description: Disable safety checker for generated images.
+              type: boolean
+          required:
+            - prompt
+          additionalProperties: false
+      description: 'AI model for content generation. Rate limit: 150 requests per minute.'
+    qwen-image-fast:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation.
+              type: integer
+            width:
+              title: Width
+              maximum: 1440
+              minimum: 256
+              description: >-
+                Width of the generated image. Only used when
+                aspect_ratio=custom. Must be a multiple of 16.
+              type: integer
+            height:
+              title: Height
+              maximum: 1440
+              minimum: 256
+              description: >-
+                Height of the generated image. Only used when
+                aspect_ratio=custom. Must be a multiple of 16.
+              type: integer
+            prompt:
+              title: Prompt
+              description: Text prompt for image generation.
+              type: string
+            creativity:
+              title: Creativity
+              default: 0.62
+              maximum: 1
+              minimum: 0
+              description: >-
+                Control the creativity of the model. Higher values increase the
+                seed diversity.
+              type: number
+            aspect_ratio:
+              enum:
+                - '1:1'
+                - '16:9'
+                - '9:16'
+                - '4:3'
+                - '3:4'
+                - '3:2'
+                - '2:3'
+                - custom
+              title: aspect_ratio
+              description: Aspect ratio for the generated image.
+              default: '16:9'
+              type: string
+            disable_safety_checker:
+              title: Disable Safety Checker
+              default: false
+              description: Disable safety checker for generated images.
+              type: boolean
+          required:
+            - prompt
+          additionalProperties: false
+      description: 'AI model for content generation. Rate limit: 150 requests per minute.'
+    qwen-image-edit-plus:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation
+              type: integer
+            image:
+              items:
+                type: string
+                format: uri
+              title: Image
+              description: 'Images to use as reference. Must be jpeg, png, gif, or webp.'
+              type: array
+            prompt:
+              title: Prompt
+              description: Text instruction on how to edit the given image.
+              type: string
+            go_fast:
+              title: Go Fast
+              default: true
+              description: Run faster predictions with additional optimizations.
+              type: boolean
+            aspect_ratio:
+              enum:
+                - '1:1'
+                - '16:9'
+                - '9:16'
+                - '4:3'
+                - '3:4'
+                - match_input_image
+              title: aspect_ratio
+              description: Aspect ratio for the generated image
+              default: match_input_image
+              type: string
+            output_format:
+              enum:
+                - webp
+                - jpg
+                - png
+              title: output_format
+              description: Format of the output images
+              default: webp
+              type: string
+            output_quality:
+              title: Output Quality
+              default: 95
+              maximum: 100
+              minimum: 0
+              description: >-
+                Quality when saving the output images, from 0 to 100. 100 is
+                best quality, 0 is lowest quality. Not relevant for .png outputs
+              type: integer
+            disable_safety_checker:
+              title: Disable Safety Checker
+              default: false
+              description: Disable safety checker for generated images.
+              type: boolean
+          required:
+            - prompt
+            - image
+          additionalProperties: false
+      description: 'AI model for content generation. Rate limit: 150 requests per minute.'
+    vace:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              default: -1
+              description: Random seed (-1 for random)
+              type: integer
+            size:
+              enum:
+                - 720*1280
+                - 1280*720
+                - 480*832
+                - 832*480
+              title: size
+              description: Output resolution
+              default: 832*480
+              type: string
+            prompt:
+              title: Prompt
+              description: Prompt
+              type: string
+            src_mask:
+              title: Src Mask
+              format: uri
+              description: Input mask video or image to edit.
+              type: string
+            frame_num:
+              title: Frame Num
+              default: 81
+              description: Number of frames to generate.
+              type: integer
+            src_video:
+              title: Src Video
+              format: uri
+              description: Input video to edit.
+              type: string
+            speed_mode:
+              enum:
+                - "Lightly Juiced \U0001F34A (more consistent)"
+                - "Juiced \U0001F525 (more speed)"
+                - "Extra Juiced \U0001F680 (even more speed)"
+              title: speed_mode
+              description: Speed optimization level
+              default: "Lightly Juiced \U0001F34A (more consistent)"
+              type: string
+            sample_shift:
+              title: Sample Shift
+              default: 16
+              description: Sample shift
+              type: integer
+            sample_steps:
+              title: Sample Steps
+              default: 50
+              description: Sample steps
+              type: integer
+            sample_solver:
+              enum:
+                - unipc
+                - dpm++
+              title: sample_solver
+              description: Sample solver
+              default: unipc
+              type: string
+            src_ref_images:
+              items:
+                type: string
+                format: uri
+              title: Src Ref Images
+              description: Input reference images to edit.
+              type: array
+            sample_guide_scale:
+              title: Sample Guide Scale
+              default: 5
+              description: Sample guide scale
+              type: number
+          required:
+            - prompt
+          additionalProperties: false
+      description: >-
+        AI model based on VACE-14B for video generation. Rate limit: 30 requests
+        per minute.
+    p-image:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation.
+              type: integer
+            width:
+              title: Width
+              maximum: 1440
+              minimum: 256
+              description: >-
+                Width of the generated image. Only used when
+                aspect_ratio=custom. Must be a multiple of 16.
+              type: integer
+            height:
+              title: Height
+              maximum: 1440
+              minimum: 256
+              description: >-
+                Height of the generated image. Only used when
+                aspect_ratio=custom. Must be a multiple of 16.
+              type: integer
+            prompt:
+              title: Prompt
+              description: Text prompt for image generation.
+              type: string
+            lora_scale:
+              title: Lora Scale
+              default: 0.5
+              maximum: 3
+              minimum: -1
+              description: >-
+                Determines how strongly the main LoRA should be applied. 0.5
+                usually works well for most LoRAs.
+              type: number
+            aspect_ratio:
+              enum:
+                - '1:1'
+                - '16:9'
+                - '9:16'
+                - '4:3'
+                - '3:4'
+                - '3:2'
+                - '2:3'
+                - custom
+              title: aspect_ratio
+              description: Aspect ratio for the generated image.
+              default: '16:9'
+              type: string
+            hf_api_token:
+              title: Hf Api Token
+              format: password
+              writeOnly: true
+              description: >-
+                HuggingFace API token. If you're using a HuggingFace LoRAs that
+                needs authentication, you'll need to provide an API token.
+              x-cog-secret: true
+              type: string
+            lora_weights:
+              title: Lora Weights
+              description: >-
+                Load LoRA weights. Supports HuggingFace URLs in the format
+                huggingface.co/<owner>/<model-name>[/<lora-weights-file.safetensors>].
+                HuggingFace LoRAs may require an API token to access, which you
+                can provide in the `hf_api_token` input.
+              type: string
+            prompt_upsampling:
+              title: Prompt Upsampling
+              default: false
+              description: Upsample the prompt with an LLM.
+              type: boolean
+            disable_safety_checker:
+              title: Disable Safety Checker
+              default: false
+              description: Disable safety checker for generated images.
+              type: boolean
+          required:
+            - prompt
+          additionalProperties: false
+      description: >-
+        Ultra-fast text-to-image generation with automatic prompt enhancement
+        and 2-stage refinement. Supports custom aspect ratios and dimensions.
+        Rate limit: 250 requests per minute.
+    p-image-edit:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation.
+              type: integer
+            turbo:
+              title: Turbo
+              default: true
+              description: >-
+                If turned on, the model will run faster with additional
+                optimizations. For complicated tasks, it is recommended to turn
+                this off.
+              type: boolean
+            images:
+              items:
+                type: string
+                format: uri
+              title: Images
+              default: []
+              minItems: 1
+              maxItems: 5
+              description: >-
+                Images to use as a reference (1-5). For editing tasks, provide
+                the main image as the first image.
+              type: array
+            prompt:
+              title: Prompt
+              description: >-
+                Text prompt for image generation. Make sure to describe your
+                edit task clearly. You can refer to the images as 'image 1' and
+                'image 2' and so on.
+              type: string
+            aspect_ratio:
+              enum:
+                - match_input_image
+                - '1:1'
+                - '16:9'
+                - '9:16'
+                - '4:3'
+                - '3:4'
+                - '3:2'
+                - '2:3'
+              title: aspect_ratio
+              description: >-
+                Aspect ratio for the generated image. `match_input_image` will
+                match the aspect ratio of the first image.
+              default: match_input_image
+              type: string
+            disable_safety_checker:
+              title: Disable Safety Checker
+              default: false
+              description: Disable safety checker for generated images.
+              type: boolean
+          required:
+            - prompt
+          additionalProperties: false
+      description: >-
+        Edit and compose multiple images (1-5) with text instructions. Supports
+        various editing modes and flexible aspect ratios. Rate limit: 250
+        requests per minute.
+    p-image-lora:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation.
+              type: integer
+            width:
+              title: Width
+              maximum: 1440
+              minimum: 256
+              description: >-
+                Width of the generated image. Only used when
+                aspect_ratio=custom. Must be a multiple of 16.
+              type: integer
+            height:
+              title: Height
+              maximum: 1440
+              minimum: 256
+              description: >-
+                Height of the generated image. Only used when
+                aspect_ratio=custom. Must be a multiple of 16.
+              type: integer
+            prompt:
+              title: Prompt
+              description: Text prompt for image generation.
+              type: string
+            lora_scale:
+              title: Lora Scale
+              default: 0.5
+              maximum: 3
+              minimum: -1
+              description: >-
+                Determines how strongly the main LoRA should be applied. 0.5
+                usually works well for most LoRAs.
+              type: number
+            aspect_ratio:
+              enum:
+                - '1:1'
+                - '16:9'
+                - '9:16'
+                - '4:3'
+                - '3:4'
+                - '3:2'
+                - '2:3'
+                - custom
+              title: aspect_ratio
+              description: Aspect ratio for the generated image.
+              default: '16:9'
+              type: string
+            hf_api_token:
+              title: Hf Api Token
+              format: password
+              writeOnly: true
+              description: >-
+                HuggingFace API token. If you're using a HuggingFace LoRAs that
+                needs authentication, you'll need to provide an API token.
+              x-cog-secret: true
+              type: string
+            lora_weights:
+              title: Lora Weights
+              description: >-
+                Load LoRA weights. Supports HuggingFace URLs in the format
+                huggingface.co/<owner>/<model-name>[/<lora-weights-file.safetensors>].
+                HuggingFace LoRAs may require an API token to access, which you
+                can provide in the `hf_api_token` input.
+              type: string
+            prompt_upsampling:
+              title: Prompt Upsampling
+              default: false
+              description: upsample the prompt with an llm
+              type: boolean
+            disable_safety_checker:
+              title: Disable Safety Checker
+              default: false
+              description: Disable safety checker for generated images.
+              type: boolean
+          required:
+            - prompt
+          additionalProperties: false
+      description: 'AI model for content generation. Rate limit: 250 requests per minute.'
+    p-image-edit-lora:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation.
+              type: integer
+            turbo:
+              title: Turbo
+              default: true
+              description: >-
+                If turned on, the model will run faster with additional
+                optimizations. For complicated tasks, it is recommended to turn
+                this off.
+              type: boolean
+            images:
+              items:
+                type: string
+                format: uri
+              title: Images
+              default: []
+              description: >-
+                Images to use as a reference. For editing task, provide the main
+                image as the first image.
+              type: array
+            prompt:
+              title: Prompt
+              description: >-
+                Text prompt for image generation. Make sure to describe your
+                edit task clearly. You can refer to the images as 'image 1' and
+                'image 2' and so on.
+              type: string
+            lora_scale:
+              title: Lora Scale
+              default: 1
+              maximum: 3
+              minimum: -1
+              description: Determines how strongly the main LoRA should be applied.
+              type: number
+            aspect_ratio:
+              enum:
+                - match_input_image
+                - '1:1'
+                - '16:9'
+                - '9:16'
+                - '4:3'
+                - '3:4'
+                - '3:2'
+                - '2:3'
+              title: aspect_ratio
+              description: >-
+                Aspect ratio for the generated image. `match_input_image` will
+                match the aspect ratio of the first image.
+              default: match_input_image
+              type: string
+            hf_api_token:
+              title: Hf Api Token
+              format: password
+              writeOnly: true
+              description: >-
+                HuggingFace API token. If you're using a HuggingFace LoRAs that
+                needs authentication, you'll need to provide an API token.
+              x-cog-secret: true
+              type: string
+            lora_weights:
+              title: Lora Weights
+              description: >-
+                Load LoRA weights. Supports HuggingFace URLs in the format
+                huggingface.co/<owner>/<model-name>[/<lora-weights-file.safetensors>].
+                HuggingFace LoRAs may require an API token to access, which you
+                can provide in the `hf_api_token` input.
+              type: string
+            disable_safety_checker:
+              title: Disable Safety Checker
+              default: false
+              description: Disable safety checker for generated images.
+              type: boolean
+          required:
+            - prompt
+          additionalProperties: false
+      description: 'AI model for content generation. Rate limit: 250 requests per minute.'
+    p-image-trainer:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            steps:
+              title: Steps
+              default: 1000
+              maximum: 5000
+              minimum: 100
+              multipleOf: 100
+              description: Total number of training steps (must be a multiple of 100)
+              type: integer
+            image_data:
+              title: Image Data
+              format: uri
+              description: >-
+                Zip archive with images of a consistent style. Use at least 10
+                images. The zip can also contain a text file for each image
+                (e.g., photo.txt for photo.jpg) to specify edit instructions for
+                the image pair.
+              type: string
+            learning_rate:
+              title: Learning Rate
+              default: 0.0001
+              maximum: 0.01
+              minimum: 0.00001
+              description: Learning rate applied to trainable parameters
+              type: number
+            training_type:
+              enum:
+                - content
+                - style
+                - balanced
+              title: training_type
+              description: Type of training to perform
+              default: balanced
+              type: string
+            default_caption:
+              title: Default Caption
+              description: >-
+                Default caption to use when caption files are missing. If not
+                provided and captions are missing, training will fail.
+              type: string
+          required:
+            - image_data
+          additionalProperties: false
+      description: >-
+        Train custom LoRA models for use with p-image-lora. The training job
+        returns a zip file containing the trained LoRA weights, which must be
+        uploaded to HuggingFace. Use the HuggingFace repository URL with
+        p-image-lora model. Rate limit: 5 requests per minute.
+    p-image-edit-trainer:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            steps:
+              title: Steps
+              default: 1000
+              maximum: 5000
+              minimum: 100
+              multipleOf: 100
+              description: Number of steps to train for (must be a multiple of 100)
+              type: integer
+            image_data:
+              title: Image Data
+              format: uri
+              description: >-
+                Zip archive with pairs of images for edit training. Images
+                should be named ROOT_start.EXT and ROOT_end.EXT (e.g.,
+                photo_start.jpg and photo_end.jpg). Can include multiple
+                reference images: ROOT_start.EXT, ROOT_start2.EXT,
+                ROOT_start3.EXT, ..., ROOT_end.EXT. Can also contain text files
+                (ROOT.txt) to specify edit instructions for each image pair.
+              type: string
+            learning_rate:
+              title: Learning Rate
+              default: 0.0001
+              maximum: 0.01
+              minimum: 0.00001
+              description: Learning rate for LoRA parameters
+              type: number
+            default_caption:
+              title: Default Caption
+              description: >-
+                Default caption to use when caption files are missing. If not
+                provided and captions are missing, training will fail.
+              type: string
+          required:
+            - image_data
+          additionalProperties: false
+      description: >-
+        Train custom LoRA models for use with p-image-edit-lora. The training
+        job returns a zip file containing the trained LoRA weights, which must
+        be uploaded to HuggingFace. Use the HuggingFace repository URL with
+        p-image-edit-lora model. Rate limit: 5 requests per minute.
+    z-image-turbo:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation
+              type: integer
+            width:
+              title: Width
+              default: 1024
+              maximum: 2048
+              minimum: 64
+              description: Width of the generated image
+              type: integer
+            height:
+              title: Height
+              default: 1024
+              maximum: 2048
+              minimum: 64
+              description: Height of the generated image
+              type: integer
+            prompt:
+              title: Prompt
+              description: Text prompt for image generation
+              type: string
+            go_fast:
+              title: Go Fast
+              default: false
+              description: Apply additional optimizations for faster generation
+              type: boolean
+            output_format:
+              enum:
+                - png
+                - jpg
+                - webp
+              title: output_format
+              description: Format of the output images
+              default: jpg
+              type: string
+            guidance_scale:
+              title: Guidance Scale
+              default: 0
+              maximum: 20
+              minimum: 0
+              description: Guidance scale. Should be 0 for Turbo models
+              type: number
+            output_quality:
+              title: Output Quality
+              default: 80
+              maximum: 100
+              minimum: 0
+              description: >-
+                Quality when saving the output images, from 0 to 100. 100 is
+                best quality, 0 is lowest quality. Not relevant for .png outputs
+              type: integer
+            num_inference_steps:
+              title: Num Inference Steps
+              default: 8
+              maximum: 50
+              minimum: 1
+              description: Number of inference steps.
+              type: integer
+          required:
+            - prompt
+          additionalProperties: false
+      description: >-
+        AI model based on z-image for image generation. Rate limit: 150 requests
+        per minute.
+    z-image-turbo-lora:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation
+              type: integer
+            width:
+              title: Width
+              default: 1024
+              maximum: 1440
+              minimum: 64
+              description: Width of the generated image
+              type: integer
+            height:
+              title: Height
+              default: 1024
+              maximum: 1440
+              minimum: 64
+              description: Height of the generated image
+              type: integer
+            prompt:
+              title: Prompt
+              description: Text prompt for image generation
+              type: string
+            lora_scales:
+              items:
+                type: number
+              title: Lora Scales
+              description: >-
+                Scales for each LoRA as an array of floats. Must match the
+                number of lora_weights. Defaults to 1.0 for each if not
+                provided.
+              type: array
+            lora_weights:
+              items:
+                type: string
+              title: Lora Weights
+              description: >-
+                LoRA weights as an array of URLs. Supports .safetensors URLs,
+                tar files, and zip files (e.g.,
+                ['https://example.com/lora1.safetensors',
+                'https://example.com/lora2.safetensors'])
+              type: array
+            output_format:
+              enum:
+                - png
+                - jpg
+                - webp
+              title: output_format
+              description: Format of the output images
+              default: jpg
+              type: string
+            guidance_scale:
+              title: Guidance Scale
+              default: 0
+              maximum: 20
+              minimum: 0
+              description: Guidance scale. Should be 0 for Turbo models
+              type: number
+            output_quality:
+              title: Output Quality
+              default: 80
+              maximum: 100
+              minimum: 0
+              description: >-
+                Quality when saving the output images, from 0 to 100. 100 is
+                best quality, 0 is lowest quality. Not relevant for .png outputs
+              type: integer
+            num_inference_steps:
+              title: Num Inference Steps
+              default: 8
+              maximum: 50
+              minimum: 1
+              description: >-
+                Number of inference steps. This actually results in
+                (num_inference_steps - 1) DiT forwards
+              type: integer
+          required:
+            - prompt
+          additionalProperties: false
+      description: >-
+        AI model based on z-image compatible with custom loras for content
+        generation. Rate limit: 150 requests per minute.
+    p-video:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          properties:
+            fps:
+              enum:
+                - 24
+                - 48
+              title: fps
+              description: Frames per second of the video.
+              default: 24
+              type: integer
+            seed:
+              title: Seed
+              description: Random seed. Set for reproducible generation.
+              type: integer
+            audio:
+              title: Audio
+              format: uri
+              description: >-
+                Input audio to condition video generation. Supports flac, mp3,
+                wav.
+              type: string
+            draft:
+              title: Draft
+              default: false
+              description: >-
+                Draft mode. Generates a lower-quality preview of the video, but
+                if you fix the seed it will be the exact same video as the
+                non-draft mode, just with a faster generation. Use this to
+                experiment.
+              type: boolean
+            image:
+              title: Image
+              format: uri
+              description: >-
+                Input image to generate video from (image-to-video). Supports
+                jpg, jpeg, png, webp.
+              type: string
+            prompt:
+              title: Prompt
+              description: Text prompt for video generation.
+              type: string
+            duration:
+              title: Duration
+              default: 5
+              maximum: 10
+              minimum: 1
+              description: >-
+                Duration of the video in seconds (1-10). Ignored when audio is
+                provided.
+              type: integer
+            resolution:
+              enum:
+                - 720p
+                - 1080p
+              title: resolution
+              description: Resolution of the video.
+              default: 720p
+              type: string
+            save_audio:
+              title: Save Audio
+              default: true
+              description: Save the video with audio.
+              type: boolean
+            aspect_ratio:
+              enum:
+                - '16:9'
+                - '9:16'
+                - '4:3'
+                - '3:4'
+                - '3:2'
+                - '2:3'
+                - '1:1'
+              title: aspect_ratio
+              description: >-
+                Aspect ratio of the video. Ignored when an input image is
+                provided.
+              default: '16:9'
+              type: string
+            prompt_upsampling:
+              title: Prompt Upsampling
+              default: true
+              description: Use prompt upsampling to enhance the prompt.
+              type: boolean
+            disable_safety_filter:
+              title: Disable Safety Filter
+              default: true
+              description: >-
+                Disable safety filter for prompts (and input image). When
+                disabled, prompts are not checked for unsafe content before
+                generation.
+              type: boolean
+          required:
+            - prompt
+          additionalProperties: false
+      description: 'AI model for content generation. Rate limit: 250 requests per minute.'
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Invalid request parameters
+              details: Field 'model' is required
+            request_id: req_1234567890
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: AUTHENTICATION_FAILED
+              message: Invalid or missing API key
+              details: Include your API key in the 'apikey' header
+            request_id: req_1234567890
+    ValidationError:
+      description: Request validation failed - invalid input parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - detail
+              - status
+              - title
+            properties:
+              detail:
+                type: string
+                description: Human-readable error summary
+                example: >
+                  - input.num_inference_steps: Invalid type. Expected: integer,
+                  given: string
+              status:
+                type: integer
+                description: HTTP status code
+                example: 422
+              title:
+                type: string
+                description: Error title
+                example: Input validation failed
+              invalid_fields:
+                type: array
+                description: List of field-specific validation errors
+                items:
+                  type: object
+                  required:
+                    - type
+                    - field
+                    - description
+                  properties:
+                    type:
+                      type: string
+                      description: Type of validation error
+                      example: invalid_type
+                    field:
+                      type: string
+                      description: Field path that failed validation
+                      example: input.num_inference_steps
+                    description:
+                      type: string
+                      description: Error description
+                      example: 'Invalid type. Expected: integer, given: string'
+          examples:
+            type_error:
+              summary: Invalid parameter type
+              value:
+                detail: >
+                  - input.num_inference_steps: Invalid type. Expected: integer,
+                  given: string
+                status: 422
+                title: Input validation failed
+                invalid_fields:
+                  - type: invalid_type
+                    field: input.num_inference_steps
+                    description: 'Invalid type. Expected: integer, given: string'
+            missing_field:
+              summary: Required field missing
+              value:
+                detail: |
+                  - input.prompt: Field required
+                status: 422
+                title: Input validation failed
+                invalid_fields:
+                  - type: missing
+                    field: input.prompt
+                    description: Field required
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: INTERNAL_ERROR
+              message: An unexpected error occurred
+              details: >-
+                Please try again later or contact support if the problem
+                persists
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: NOT_FOUND
+              message: The requested resource was not found
+              details: Prediction ID does not exist or has expired
+            request_id: req_1234567890
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: RATE_LIMIT_EXCEEDED
+              message: Too many requests
+              details: >-
+                You have exceeded the rate limit for this endpoint. Please wait
+                before making additional requests.
+            request_id: req_1234567890
+      headers:
+        RateLimit-Limit:
+          description: Allowed limit in the timeframe
+          schema:
+            type: string
+          example: '10000'
+        RateLimit-Remaining:
+          description: Number of available requests remaining
+          schema:
+            type: string
+          example: '0'
+        RateLimit-Reset:
+          description: 'The time remaining, in seconds, until the rate limit quota is reset'
+          schema:
+            type: string
+          example: '42'
