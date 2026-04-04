@@ -184,8 +184,8 @@ function AppContent() {
                 </Text>
               </Box>
 
-              <Group align="flex-start" grow>
-                <Box style={{ flex: 1 }}>
+              <Group align="flex-start">
+                <Box style={{ width: 320, flexShrink: 0 }}>
                   <Text
                     size="sm"
                     fw={700}
@@ -216,7 +216,7 @@ function AppContent() {
                           >
                             {group.label}
                           </Text>
-                          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="sm">
+                          <SimpleGrid cols={1} spacing="sm">
                             {group.models.map((model: ModelConfig) => (
                               <Paper
                                 key={model.id}

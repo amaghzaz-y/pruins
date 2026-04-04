@@ -76,6 +76,18 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
   const [latestGeneration, setLatestGeneration] = useState<PredictionRecord | null>(null);
   const [generationUrl, setGenerationUrl] = useState<string | null>(null);
   const [model, setModel] = useState<ModelConfig | null>(null);
+  const [userSettings, setUserSettings] = useState<{ defaultAspectRatio: string; defaultSeed?: number }>({ defaultAspectRatio: '3:4' });
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      const settings = await getSettings();
+      setUserSettings({
+        defaultAspectRatio: settings.defaultAspectRatio,
+        defaultSeed: settings.defaultSeed,
+      });
+    };
+    loadSettings();
+  }, []);
 
   useEffect(() => {
     const m = getModelById(selectedModelId);
@@ -111,16 +123,23 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
       const defaults: Record<string, any> = { prompt: form.values.prompt };
       model.parameters.forEach(param => {
         if (param.default !== undefined) {
-          if (param.type === 'boolean') {
-            defaults[param.key] = param.default ? 'true' : 'false';
+          // Use user's default settings for specific parameters when available
+          if (param.key === 'aspect_ratio' && userSettings.defaultAspectRatio) {
+            defaults[param.key] = userSettings.defaultAspectRatio;
+          } else if (param.key === 'seed' && userSettings.defaultSeed !== undefined) {
+            defaults[param.key] = userSettings.defaultSeed;
           } else {
-            defaults[param.key] = param.default;
+            if (param.type === 'boolean') {
+              defaults[param.key] = param.default ? 'true' : 'false';
+            } else {
+              defaults[param.key] = param.default;
+            }
           }
         }
       });
       form.setValues(defaults);
     }
-  }, [model]);
+  }, [model, userSettings]);
 
   const handleSubmit = async (values: typeof form.values) => {
     if (!model) return;
@@ -216,8 +235,6 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
       }
 
       setStatus('Completed!');
-      form.reset();
-      setFiles([]);
     } catch (err: any) {
       console.error('Prediction error:', err);
       console.error('Error details:', err.errorPayload);
