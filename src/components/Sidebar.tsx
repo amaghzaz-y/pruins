@@ -1,5 +1,5 @@
 import { NavLink, Stack } from '@mantine/core';
-import { Image, Video, Library, Settings } from 'lucide-react';
+import { Image, Video, Library, Settings, Wand2 } from 'lucide-react';
 import type { View } from '../App';
 
 interface SidebarProps {
@@ -10,6 +10,15 @@ interface SidebarProps {
 export function Sidebar({ currentView, onViewChange }: SidebarProps) {
   return (
     <Stack gap="xs">
+      <NavLink
+        label="Image Generation"
+        description="Generate new images"
+        leftSection={<Wand2 size={20} />}
+        active={currentView === 'image-gen'}
+        onClick={() => onViewChange('image-gen')}
+        variant="light"
+        color="indigo"
+      />
       <NavLink
         label="Image Processing"
         description="Edit & generate images"

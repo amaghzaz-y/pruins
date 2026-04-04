@@ -54,7 +54,7 @@ export class PApiClient {
     options: { baseUrl?: string } = {}
   ) {
     this.apiKey = apiKey;
-    this.baseUrl = (options.baseUrl || 'https://api.pruna.ai').replace(/\/$/, '');
+    this.baseUrl = (options.baseUrl || import.meta.env.VITE_API_URL || 'https://api.pruna.ai').replace(/\/$/, '');
   }
 
   private get headers() {
@@ -142,7 +142,13 @@ export class PApiClient {
   }
 
   async downloadGeneration(generationUrl: string): Promise<Blob> {
-    const response = await fetch(generationUrl, {
+    // If the URL is an absolute link to the Pruna API, rewrite it to use our proxy
+    let finalUrl = generationUrl;
+    if (this.baseUrl === '/proxy' && generationUrl.includes('api.pruna.ai')) {
+      finalUrl = generationUrl.replace(/^https:\/\/api\.pruna\.ai/, '/proxy');
+    }
+
+    const response = await fetch(finalUrl, {
       method: 'GET',
       headers: this.headers,
     });

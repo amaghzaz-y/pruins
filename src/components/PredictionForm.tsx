@@ -10,18 +10,56 @@ import {
   FileButton,
   Box,
   LoadingOverlay,
-  Badge,
-  Alert
+  Alert,
+  AspectRatio,
+  Image,
+  ActionIcon,
+  SimpleGrid
 } from '@mantine/core';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from '@mantine/form';
-import { Upload, Image as ImageIcon, Video as VideoIcon, AlertCircle, Check } from 'lucide-react';
+import { Upload, Image as ImageIcon, Video as VideoIcon, AlertCircle, Check, X } from 'lucide-react';
 import { PApiClient } from '../api/client';
-import { db } from '../db';
-import { getApiKey } from '../db';
+import { db, getSettings } from '../db';
 
 interface PredictionFormProps {
-  type: 'p-image-edit' | 'p-gen-video';
+  type: 'p-image' | 'p-image-edit' | 'p-gen-video';
+}
+
+function ImagePreview({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  if (!url) return null;
+
+  return (
+    <Box pos="relative">
+      <AspectRatio ratio={1}>
+        <Image src={url} radius="md" fit="cover" style={{ border: '1px solid var(--mantine-color-default-border)' }} />
+      </AspectRatio>
+      <ActionIcon 
+        pos="absolute" 
+        top={-8} 
+        right={-8} 
+        color="red" 
+        size="sm" 
+        radius="xl" 
+        variant="filled"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        style={{ zIndex: 10 }}
+      >
+        <X size={12} />
+      </ActionIcon>
+    </Box>
+  );
 }
 
 export function PredictionForm({ type }: PredictionFormProps) {
@@ -31,6 +69,7 @@ export function PredictionForm({ type }: PredictionFormProps) {
   const [files, setFiles] = useState<File[]>([]);
 
   const isImageControl = type === 'p-image-edit';
+  const isImageGen = type === 'p-image';
 
   const form = useForm({
     initialValues: {
@@ -43,8 +82,18 @@ export function PredictionForm({ type }: PredictionFormProps) {
     },
   });
 
+  useEffect(() => {
+    getSettings().then(settings => {
+      form.setValues({
+        aspectRatio: settings.defaultAspectRatio,
+        seed: settings.defaultSeed,
+      });
+    });
+  }, []);
+
   const handleSubmit = async (values: typeof form.values) => {
-    const apiKey = await getApiKey();
+    const settings = await getSettings();
+    const apiKey = settings.apiKey;
     if (!apiKey) {
       setError('Pruna API Key not found. Please set it in Settings.');
       return;
@@ -80,7 +129,7 @@ export function PredictionForm({ type }: PredictionFormProps) {
 
       if (isImageControl) {
         inputPayload.images = uploadedUrls;
-      } else {
+      } else if (type === 'p-gen-video') {
         if (uploadedUrls.length > 0) inputPayload.image = uploadedUrls[0];
         inputPayload.resolution = '720p';
         inputPayload.fps = 24;
@@ -162,7 +211,10 @@ export function PredictionForm({ type }: PredictionFormProps) {
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="lg">
           <Box>
-            <Text size="xl" fw={700}>{isImageControl ? 'Image Reference Editing' : 'Video Generation'}</Text>
+            <Text size="xl" fw={700}>
+              {type === 'p-image-edit' ? 'Image Reference Editing' : 
+               type === 'p-image' ? 'Image Generation' : 'Video Generation'}
+            </Text>
             <Text size="xs" c="dimmed">Powered by Pruna AI Cloud</Text>
           </Box>
           
@@ -177,7 +229,7 @@ export function PredictionForm({ type }: PredictionFormProps) {
           <Group grow>
             <Select
               label="Aspect Ratio"
-              data={['1:1', '16:9', '9:16', '4:3', '21:9']}
+              data={['3:4', '4:3', '9:16', '16:9', '1:1', '21:9']}
               {...form.getInputProps('aspectRatio')}
             />
             <NumberInput
@@ -187,42 +239,39 @@ export function PredictionForm({ type }: PredictionFormProps) {
             />
           </Group>
 
-          <Box>
-            <Text size="sm" fw={500} mb={4}>{isImageControl ? 'Source Images (1-5)' : 'Base Frame (Optional)'}</Text>
-            <Group>
-              <FileButton 
-                onChange={handleFileSelect} 
-                accept="image/*" 
-                multiple={isImageControl}
-              >
-                {(props) => (
-                  <Button {...props} variant="light" color="indigo" leftSection={<Upload size={16} />}>
-                    Select Files
-                  </Button>
-                )}
-              </FileButton>
-              <Text size="xs" c="dimmed">
-                {files.length > 0 ? `${files.length} file(s) selected` : 'Supports PNG, JPG, WEBP'}
-              </Text>
-            </Group>
-            
-            {files.length > 0 && (
-              <Group gap="xs" mt="xs">
-                {files.map((file, i) => (
-                  <Badge 
-                    key={i} 
-                    variant="dot" 
-                    color="indigo" 
-                    size="sm" 
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => setFiles(cur => cur.filter((_, idx) => idx !== i))}
-                  >
-                    {file.name.length > 15 ? file.name.substring(0, 12) + '...' : file.name}
-                  </Badge>
-                ))}
+          {type !== 'p-image' && (
+            <Box>
+              <Text size="sm" fw={500} mb={4}>{isImageControl ? 'Source Images (1-5)' : 'Base Frame (Optional)'}</Text>
+              <Group>
+                <FileButton 
+                  onChange={handleFileSelect} 
+                  accept="image/*" 
+                  multiple={isImageControl}
+                >
+                  {(props) => (
+                    <Button {...props} variant="light" color="indigo" leftSection={<Upload size={16} />}>
+                      Select Files
+                    </Button>
+                  )}
+                </FileButton>
+                <Text size="xs" c="dimmed">
+                  {files.length > 0 ? `${files.length} file(s) selected` : 'Supports PNG, JPG, WEBP'}
+                </Text>
               </Group>
-            )}
-          </Box>
+              
+              {files.length > 0 && (
+                <SimpleGrid cols={{ base: 3, xs: 4, sm: 5 }} spacing="md" mt="md">
+                  {files.map((file, i) => (
+                    <ImagePreview 
+                      key={`${file.name}-${i}`} 
+                      file={file} 
+                      onRemove={() => setFiles(cur => cur.filter((_, idx) => idx !== i))} 
+                    />
+                  ))}
+                </SimpleGrid>
+              )}
+            </Box>
+          )}
 
           {status && (
             <Alert icon={<Check size={16} />} title="Cloud Processing" color="indigo" variant="light">
@@ -241,9 +290,9 @@ export function PredictionForm({ type }: PredictionFormProps) {
             size="md" 
             fullWidth 
             loading={loading}
-            leftSection={isImageControl ? <ImageIcon size={18} /> : <VideoIcon size={18} />}
+            leftSection={type === 'p-gen-video' ? <VideoIcon size={18} /> : <ImageIcon size={18} />}
           >
-            {isImageControl ? 'Initialize Cloud Processing' : 'Queue Video Generation'}
+            {isImageControl ? 'Initialize Cloud Processing' : isImageGen ? 'Generate Image' : 'Queue Video Generation'}
           </Button>
         </Stack>
       </form>

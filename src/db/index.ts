@@ -41,3 +41,21 @@ export const getApiKey = async (): Promise<string | null> => {
 export const setApiKey = async (key: string): Promise<void> => {
   await db.settings.put({ key: 'apiKey', value: key });
 };
+
+export const getSettings = async () => {
+  const apiKey = await db.settings.get('apiKey');
+  const defaultAspectRatio = await db.settings.get('defaultAspectRatio');
+  const defaultSeed = await db.settings.get('defaultSeed');
+  
+  return {
+    apiKey: apiKey?.value || '',
+    defaultAspectRatio: defaultAspectRatio?.value || '3:4',
+    defaultSeed: defaultSeed?.value ?? undefined,
+  };
+};
+
+export const updateSettings = async (settings: { apiKey?: string; defaultAspectRatio?: string; defaultSeed?: number }) => {
+  if (settings.apiKey !== undefined) await db.settings.put({ key: 'apiKey', value: settings.apiKey });
+  if (settings.defaultAspectRatio !== undefined) await db.settings.put({ key: 'defaultAspectRatio', value: settings.defaultAspectRatio });
+  if (settings.defaultSeed !== undefined) await db.settings.put({ key: 'defaultSeed', value: settings.defaultSeed });
+};

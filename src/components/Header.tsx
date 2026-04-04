@@ -13,6 +13,7 @@ export function Header({ opened, toggle, currentView }: HeaderProps) {
 
   const getTitle = () => {
     switch (currentView) {
+      case 'image-gen': return 'Image Generation';
       case 'image': return 'Image Processing';
       case 'video': return 'Video Generation';
       case 'gallery': return 'Media Gallery';
