@@ -159,7 +159,7 @@ function AppContent() {
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Box maw={1400} mx="auto" py="md">
+        <Box>
           {currentView === "generator" && (
             <Stack gap="xl">
               <Box
@@ -186,7 +186,15 @@ function AppContent() {
 
               <Group align="flex-start" grow>
                 <Box style={{ flex: 1 }}>
-                  <Text size="sm" fw={700} mb={8} style={{ letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                  <Text
+                    size="sm"
+                    fw={700}
+                    mb={8}
+                    style={{
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                    }}
+                  >
                     SELECT MODEL
                   </Text>
                   <ScrollArea type="auto" h={600}>
@@ -201,7 +209,8 @@ function AppContent() {
                             style={{
                               letterSpacing: "0.05em",
                               textTransform: "uppercase",
-                              borderBottom: "1px solid var(--mantine-color-default-border)",
+                              borderBottom:
+                                "1px solid var(--mantine-color-default-border)",
                               paddingBottom: 4,
                             }}
                           >
@@ -228,8 +237,15 @@ function AppContent() {
                                 onClick={() => setSelectedModelId(model.id)}
                               >
                                 <Stack gap="xs">
-                                  <Group justify="space-between" align="flex-start">
-                                    <Text size="sm" fw={700} style={{ letterSpacing: "0.02em" }}>
+                                  <Group
+                                    justify="space-between"
+                                    align="flex-start"
+                                  >
+                                    <Text
+                                      size="sm"
+                                      fw={700}
+                                      style={{ letterSpacing: "0.02em" }}
+                                    >
                                       {model.name}
                                     </Text>
                                     <Badge
@@ -237,13 +253,15 @@ function AppContent() {
                                         model.type.includes("video")
                                           ? "teal"
                                           : model.type.includes("edit")
-                                          ? "orange"
-                                          : "indigo"
+                                            ? "orange"
+                                            : "indigo"
                                       }
                                       variant="light"
                                       size="xs"
                                     >
-                                      {model.type.toUpperCase().replace("-", " ")}
+                                      {model.type
+                                        .toUpperCase()
+                                        .replace("-", " ")}
                                     </Badge>
                                   </Group>
                                   <Text size="xs" c="dimmed" lineClamp={2}>
@@ -264,7 +282,10 @@ function AppContent() {
                                     size="xs"
                                     c="dimmed"
                                     mt={4}
-                                    style={{ textDecoration: "underline", cursor: "pointer" }}
+                                    style={{
+                                      textDecoration: "underline",
+                                      cursor: "pointer",
+                                    }}
                                   >
                                     {model.documentation}
                                   </Text>
