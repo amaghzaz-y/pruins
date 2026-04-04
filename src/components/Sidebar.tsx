@@ -1,5 +1,5 @@
 import { NavLink, Stack, Text, Box } from '@mantine/core';
-import { Image, Video, Library, Settings, Wand2, Grid } from 'lucide-react';
+import { Settings, Wand2, Grid } from 'lucide-react';
 import type { View } from '../App';
 
 interface SidebarProps {
@@ -15,36 +15,16 @@ export function Sidebar({ currentView, onViewChange }: SidebarProps) {
           Modules
         </Text>
       </Box>
-      
+
       <NavLink
-        label="Image Generation"
-        description="Generate new images"
+        label="Generation Studio"
+        description="Create images & videos"
         leftSection={<Wand2 size={18} />}
-        active={currentView === 'image-gen'}
-        onClick={() => onViewChange('image-gen')}
-        variant={currentView === 'image-gen' ? 'filled' : 'light'}
+        active={currentView === 'generator'}
+        onClick={() => onViewChange('generator')}
+        variant={currentView === 'generator' ? 'filled' : 'light'}
         color="indigo"
-        style={{ borderRadius: '2px', border: currentView === 'image-gen' ? '2px solid var(--mantine-color-indigo-6)' : '2px solid transparent' }}
-      />
-      <NavLink
-        label="Image Processing"
-        description="Edit & generate images"
-        leftSection={<Image size={18} />}
-        active={currentView === 'image'}
-        onClick={() => onViewChange('image')}
-        variant={currentView === 'image' ? 'filled' : 'light'}
-        color="indigo"
-        style={{ borderRadius: '2px', border: currentView === 'image' ? '2px solid var(--mantine-color-indigo-6)' : '2px solid transparent' }}
-      />
-      <NavLink
-        label="Video Generation"
-        description="Create dynamic videos"
-        leftSection={<Video size={18} />}
-        active={currentView === 'video'}
-        onClick={() => onViewChange('video')}
-        variant={currentView === 'video' ? 'filled' : 'light'}
-        color="indigo"
-        style={{ borderRadius: '2px', border: currentView === 'video' ? '2px solid var(--mantine-color-indigo-6)' : '2px solid transparent' }}
+        style={{ borderRadius: '2px', border: currentView === 'generator' ? '2px solid var(--mantine-color-indigo-6)' : '2px solid transparent' }}
       />
       <NavLink
         label="Gallery"

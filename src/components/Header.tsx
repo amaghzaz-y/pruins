@@ -21,12 +21,8 @@ export function Header({ opened, toggle, currentView }: HeaderProps) {
 
   const getTitle = () => {
     switch (currentView) {
-      case "image-gen":
-        return "IMAGE GENERATION";
-      case "image":
-        return "IMAGE PROCESSING";
-      case "video":
-        return "VIDEO GENERATION";
+      case "generator":
+        return "GENERATION STUDIO";
       case "gallery":
         return "MEDIA GALLERY";
       case "settings":
@@ -84,6 +80,3 @@ export function Header({ opened, toggle, currentView }: HeaderProps) {
     </Group>
   );
 }
-
-// Helper for rem if not available
-// (Removed local rem helper as we now import it from @mantine/core)

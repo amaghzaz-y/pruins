@@ -1,12 +1,12 @@
-import { 
-  Stack, 
-  Textarea, 
-  Select, 
-  NumberInput, 
-  Button, 
-  Group, 
-  Paper, 
-  Text, 
+import {
+  Stack,
+  Textarea,
+  Select,
+  NumberInput,
+  Button,
+  Group,
+  Paper,
+  Text,
   FileButton,
   Box,
   LoadingOverlay,
@@ -14,16 +14,17 @@ import {
   AspectRatio,
   Image,
   ActionIcon,
-  SimpleGrid
+  SimpleGrid,
 } from '@mantine/core';
 import { useState, useEffect } from 'react';
 import { useForm } from '@mantine/form';
 import { Upload, Image as ImageIcon, Video as VideoIcon, AlertCircle, Check, X } from 'lucide-react';
 import { PApiClient } from '../api/client';
-import { db, getSettings } from '../db';
+import { db, getSettings, type PredictionRecord } from '../db';
+import { getModelById, type ModelConfig } from '../config/models';
 
 interface PredictionFormProps {
-  type: 'p-image' | 'p-image-edit' | 'p-gen-video';
+  selectedModelId: string;
 }
 
 function ImagePreview({ file, onRemove }: { file: File; onRemove: () => void }) {
@@ -42,12 +43,12 @@ function ImagePreview({ file, onRemove }: { file: File; onRemove: () => void }) 
       <AspectRatio ratio={1}>
         <Image src={url} radius="0" fit="cover" />
       </AspectRatio>
-      <ActionIcon 
-        pos="absolute" 
-        top={0} 
-        right={0} 
-        color="red" 
-        size="sm" 
+      <ActionIcon
+        pos="absolute"
+        top={0}
+        right={0}
+        color="red"
+        size="sm"
         radius="0"
         variant="filled"
         onClick={(e) => {
@@ -62,36 +63,69 @@ function ImagePreview({ file, onRemove }: { file: File; onRemove: () => void }) 
   );
 }
 
-export function PredictionForm({ type }: PredictionFormProps) {
+function parseRatio(ratioStr: string): number {
+  const [w, h] = ratioStr.split(':').map(Number);
+  return w / h;
+}
+
+export function PredictionForm({ selectedModelId }: PredictionFormProps) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [latestGeneration, setLatestGeneration] = useState<PredictionRecord | null>(null);
+  const [generationUrl, setGenerationUrl] = useState<string | null>(null);
+  const [model, setModel] = useState<ModelConfig | null>(null);
 
-  const isImageControl = type === 'p-image-edit';
-  const isImageGen = type === 'p-image';
+  useEffect(() => {
+    const m = getModelById(selectedModelId);
+    setModel(m || null);
+    if (m) {
+      // Reset file state when model changes
+      setFiles([]);
+      setLatestGeneration(null);
+      if (generationUrl) {
+        URL.revokeObjectURL(generationUrl);
+        setGenerationUrl(null);
+      }
+    }
+  }, [selectedModelId]);
 
-  const form = useForm({
+  useEffect(() => {
+    if (generationUrl) {
+      return () => URL.revokeObjectURL(generationUrl);
+    }
+  }, [generationUrl]);
+
+  const form = useForm<Record<string, any>>({
     initialValues: {
       prompt: '',
-      aspectRatio: '16:9',
-      seed: undefined as number | undefined,
     },
     validate: {
-      prompt: (val) => (val.length < 3 ? 'Prompt is too short' : null),
+      prompt: (val) => (typeof val === 'string' && val.length < 3 ? 'Prompt is too short' : null),
     },
   });
 
   useEffect(() => {
-    getSettings().then(settings => {
-      form.setValues({
-        aspectRatio: settings.defaultAspectRatio,
-        seed: settings.defaultSeed,
+    if (model) {
+      const defaults: Record<string, any> = { prompt: form.values.prompt };
+      model.parameters.forEach(param => {
+        if (param.default !== undefined) {
+          if (param.type === 'boolean') {
+            defaults[param.key] = param.default ? 'true' : 'false';
+          } else {
+            defaults[param.key] = param.default;
+          }
+        }
       });
-    });
-  }, []);
+      form.setValues(defaults);
+    }
+  }, [model]);
 
   const handleSubmit = async (values: typeof form.values) => {
+    if (!model) return;
+    const m = model; // non-null local reference
+
     const settings = await getSettings();
     const apiKey = settings.apiKey;
     if (!apiKey) {
@@ -99,8 +133,8 @@ export function PredictionForm({ type }: PredictionFormProps) {
       return;
     }
 
-    if (isImageControl && files.length === 0) {
-      setError('At least one source image is required.');
+    if (m.requiresImage && files.length === 0) {
+      setError(`${m.name} requires at least one source image.`);
       return;
     }
 
@@ -113,49 +147,80 @@ export function PredictionForm({ type }: PredictionFormProps) {
     try {
       // 1. Upload files
       const uploadedUrls: string[] = [];
-      for (const file of files) {
-        const uploaded = await client.uploadFile(file);
-        uploadedUrls.push(uploaded.urls.get);
+      if (files.length > 0) {
+        for (const file of files) {
+          const uploaded = await client.uploadFile(file);
+          uploadedUrls.push(uploaded.urls.get);
+        }
       }
 
-      // 2. Create prediction
+      // Build input payload from form values (excluding file-based parameters)
+      const inputPayload: Record<string, any> = {};
+      m.parameters.forEach(param => {
+        // Skip file-based parameters (they'll be added later)
+        if (['images', 'image', 'src_ref_images', 'image_data'].includes(param.key)) {
+          return;
+        }
+        const value = values[param.key];
+        if (value !== undefined && value !== '') {
+          if (param.type === 'boolean') {
+            inputPayload[param.key] = value === 'true' || value === true;
+          } else if (param.type === 'number') {
+            inputPayload[param.key] = Number(value);
+          } else {
+            inputPayload[param.key] = value;
+          }
+        }
+      });
+
+      // Ensure prompt is included
+      inputPayload.prompt = values.prompt;
+
+      // Add uploaded files to payload based on model's expected parameter
+      if (files.length > 0) {
+        if (m.parameters.some(p => p.key === 'images')) {
+          inputPayload.images = uploadedUrls;
+        } else if (m.parameters.some(p => p.key === 'image')) {
+          inputPayload.image = uploadedUrls[0];
+        } else if (m.parameters.some(p => p.key === 'src_ref_images')) {
+          inputPayload.src_ref_images = uploadedUrls;
+        }
+      }
+
+      console.log('Sending prediction with model:', m.id, 'payload:', inputPayload);
+
+      // 3. Create prediction
       setStatus('Initializing prediction...');
-      const inputPayload: any = {
-        prompt: values.prompt,
-        aspect_ratio: values.aspectRatio,
-        seed: values.seed,
-        disable_safety_checker: true,
-      };
-
-      if (isImageControl) {
-        inputPayload.images = uploadedUrls;
-      } else if (type === 'p-gen-video') {
-        if (uploadedUrls.length > 0) inputPayload.image = uploadedUrls[0];
-        inputPayload.resolution = '720p';
-        inputPayload.fps = 24;
-        inputPayload.duration = 5;
-      }
-
-      const prediction = await client.createPrediction(type, inputPayload);
+      const prediction = await client.createPrediction(m.id, inputPayload);
       const predId = (prediction as any).id;
 
-      // 3. Save initial record
+      // 4. Save initial record
       await db.predictions.put({
         id: predId,
-        model: type,
+        model: m.id,
         input: inputPayload,
         status: 'starting',
         createdAt: Date.now(),
       });
 
-      // 4. Poll
+      // 5. Poll
       setStatus('Processing on Pruna Cloud...');
       await pollPrediction(client, predId);
+
+      // 6. Fetch the completed prediction to display
+      const completedPrediction = await db.predictions.get(predId);
+      if (completedPrediction && completedPrediction.assetBlob) {
+        setLatestGeneration(completedPrediction);
+        const url = URL.createObjectURL(completedPrediction.assetBlob);
+        setGenerationUrl(url);
+      }
 
       setStatus('Completed!');
       form.reset();
       setFiles([]);
     } catch (err: any) {
+      console.error('Prediction error:', err);
+      console.error('Error details:', err.errorPayload);
       setError(err.message || 'Workflow failed');
     } finally {
       setLoading(false);
@@ -176,7 +241,7 @@ export function PredictionForm({ type }: PredictionFormProps) {
               completedAt: Date.now(),
               generationUrl: resp.generation_url,
               assetBlob: blob,
-              assetType: resp.generation_url!.endsWith('.mp4') ? 'video' : 'image'
+              assetType: resp.generation_url!.endsWith('.mp4') ? 'video' : 'image',
             });
             resolve();
           } else if (resp.status === 'failed' || resp.status === 'canceled') {
@@ -193,63 +258,122 @@ export function PredictionForm({ type }: PredictionFormProps) {
     });
   };
 
-  // Improved file handler
   const handleFileSelect = (payload: File | File[] | null) => {
     if (!payload) return;
     const selectedFiles = Array.isArray(payload) ? payload : [payload];
-    if (isImageControl) {
-      setFiles(cur => [...cur, ...selectedFiles].slice(0, 5));
+    if (model?.multipleImages) {
+      setFiles(cur => [...cur, ...selectedFiles]);
     } else {
       setFiles([selectedFiles[0]]);
     }
+    // Clear previous generation when new files are selected
+    if (latestGeneration) {
+      setLatestGeneration(null);
+      if (generationUrl) {
+        URL.revokeObjectURL(generationUrl);
+        setGenerationUrl(null);
+      }
+    }
   };
+
+  if (!model) {
+    return (
+      <Paper withBorder p="xl" bg="var(--mantine-color-body)" style={{ border: '2px solid var(--mantine-color-default-border)', borderRadius: '4px' }}>
+        <Text c="red">Model not found: {selectedModelId}</Text>
+      </Paper>
+    );
+  }
 
   return (
     <Paper withBorder p="xl" pos="relative" bg="var(--mantine-color-body)" style={{ border: '2px solid var(--mantine-color-default-border)', borderRadius: '4px' }}>
       <LoadingOverlay visible={loading} zIndex={1000} overlayProps={{ radius: 'sm', blur: 2 }} />
-      
+
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="lg">
           <Box style={{ borderBottom: '2px solid var(--mantine-color-default-border)', paddingBottom: 'md' }}>
             <Text size="xl" fw={700} style={{ letterSpacing: '0.02em' }}>
-              {type === 'p-image-edit' ? 'IMAGE REFERENCE EDITING' : 
-               type === 'p-image' ? 'IMAGE GENERATION' : 'VIDEO GENERATION'}
+              {model.name.toUpperCase()}
             </Text>
-            <Text size="xs" c="dimmed" style={{ letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '4px' }}>Powered by Pruna AI Cloud</Text>
+            <Text size="xs" c="dimmed" style={{ letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '4px' }}>
+              {model.description}
+            </Text>
+            <Group mt="xs" gap="xs">
+              <Text size="xs" c="indigo" fw={700} style={{ letterSpacing: '0.02em' }}>
+                {model.pricing}
+              </Text>
+              <Text size="xs" c="dimmed">|</Text>
+              <Text size="xs" c="dimmed">{model.rateLimit}</Text>
+            </Group>
           </Box>
-          
+
           <Textarea
-            label="VISUAL PROMPT"
-            placeholder="A cinematic aerial shot of a neon cyberpunk city..."
+            label="PROMPT"
+            placeholder="Describe what you want to generate..."
             required
             minRows={4}
             {...form.getInputProps('prompt')}
             styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
           />
 
-          <Group grow>
-            <Select
-              label="ASPECT RATIO"
-              data={['3:4', '4:3', '9:16', '16:9', '1:1', '21:9']}
-              {...form.getInputProps('aspectRatio')}
-              styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
-            />
-            <NumberInput
-              label="SEED"
-              placeholder="Random"
-              {...form.getInputProps('seed')}
-              styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
-            />
-          </Group>
+          {/* Render dynamic parameters */}
+          {model.parameters
+            .filter(p => p.key !== 'prompt' && p.key !== 'images' && p.key !== 'image' && p.key !== 'src_ref_images')
+            .map((param) => (
+            <Box key={param.key}>
+              {param.type === 'select' && (
+                <Select
+                  label={param.label.toUpperCase()}
+                  data={param.options ?? (param.key === 'aspect_ratio' ? model.defaultAspectRatios : [])}
+                  {...form.getInputProps(param.key)}
+                  styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
+                />
+              )}
+              {param.type === 'number' && (
+                <NumberInput
+                  label={param.label.toUpperCase()}
+                  placeholder={param.default?.toString()}
+                  min={param.min}
+                  max={param.max}
+                  step={param.step}
+                  {...form.getInputProps(param.key)}
+                  styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
+                />
+              )}
+              {param.type === 'boolean' && (
+                <Select
+                  label={param.label.toUpperCase()}
+                  data={[
+                    { value: 'true', label: 'TRUE' },
+                    { value: 'false', label: 'FALSE' },
+                  ]}
+                  defaultValue={param.default ? 'true' : 'false'}
+                  {...form.getInputProps(param.key)}
+                  styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
+                />
+              )}
+              {param.type === 'text' && (
+                <Textarea
+                  label={param.label.toUpperCase()}
+                  placeholder={`Enter ${param.label.toLowerCase()}`}
+                  minRows={2}
+                  {...form.getInputProps(param.key)}
+                  styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
+                />
+              )}
+            </Box>
+          ))}
 
-          {type !== 'p-image' && (
+          {/* File input for models that require images */}
+          {(model.requiresImage || model.parameters.some(p => p.key === 'image' || p.key === 'images' || p.key === 'src_ref_images')) && (
             <Box>
-              <Text size="sm" fw={700} mb={4} style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}>{isImageControl ? 'SOURCE IMAGES (1-5)' : 'BASE FRAME (OPTIONAL)'}</Text>
+              <Text size="sm" fw={700} mb={4} style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                {model.multipleImages ? 'SOURCE IMAGES (MULTIPLE)' : 'SOURCE IMAGE'}
+              </Text>
               <Group>
-                <FileButton 
-                  onChange={handleFileSelect} 
-                  accept="image/*" 
-                  multiple={isImageControl}
+                <FileButton
+                  onChange={handleFileSelect}
+                  accept="image/*"
+                  multiple={model.multipleImages}
                 >
                   {(props) => (
                     <Button {...props} variant="outline" color="indigo" leftSection={<Upload size={16} />} style={{ borderRadius: '2px', border: '2px solid var(--mantine-color-indigo-6)' }}>
@@ -261,14 +385,14 @@ export function PredictionForm({ type }: PredictionFormProps) {
                   {files.length > 0 ? `${files.length} FILE(S) SELECTED` : 'SUPPORTS PNG, JPG, WEBP'}
                 </Text>
               </Group>
-              
+
               {files.length > 0 && (
                 <SimpleGrid cols={{ base: 3, xs: 4, sm: 5 }} spacing="md" mt="md">
                   {files.map((file, i) => (
-                    <ImagePreview 
-                      key={`${file.name}-${i}`} 
-                      file={file} 
-                      onRemove={() => setFiles(cur => cur.filter((_, idx) => idx !== i))} 
+                    <ImagePreview
+                      key={`${file.name}-${i}`}
+                      file={file}
+                      onRemove={() => setFiles(cur => cur.filter((_, idx) => idx !== i))}
                     />
                   ))}
                 </SimpleGrid>
@@ -288,15 +412,43 @@ export function PredictionForm({ type }: PredictionFormProps) {
             </Alert>
           )}
 
-          <Button 
-            type="submit" 
-            size="md" 
-            fullWidth 
+          {latestGeneration && generationUrl && latestGeneration.status === 'succeeded' && (
+            <Box mt="md">
+              <Text size="sm" fw={700} mb={8} style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                GENERATED RESULT
+              </Text>
+              <Paper withBorder style={{ border: '2px solid var(--mantine-color-indigo-6)', borderRadius: '4px', overflow: 'hidden' }}>
+                <AspectRatio ratio={parseRatio(model.defaultAspectRatios[0])}>
+                  {latestGeneration.assetType === 'video' ? (
+                    <video
+                      src={generationUrl}
+                      controls
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <Image
+                      src={generationUrl}
+                      alt={latestGeneration.input.prompt}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  )}
+                </AspectRatio>
+              </Paper>
+              <Text size="xs" c="dimmed" mt={8} style={{ letterSpacing: '0.02em' }}>
+                Prompt: {latestGeneration.input.prompt}
+              </Text>
+            </Box>
+          )}
+
+          <Button
+            type="submit"
+            size="md"
+            fullWidth
             loading={loading}
-            leftSection={type === 'p-gen-video' ? <VideoIcon size={18} /> : <ImageIcon size={18} />}
+            leftSection={model.type.includes('video') ? <VideoIcon size={18} /> : <ImageIcon size={18} />}
             style={{ borderRadius: '2px', border: '2px solid var(--mantine-color-indigo-6)', height: '48px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}
           >
-            {isImageControl ? 'INITIALIZE CLOUD PROCESSING' : isImageGen ? 'GENERATE IMAGE' : 'QUEUE VIDEO GENERATION'}
+            GENERATE
           </Button>
         </Stack>
       </form>
