@@ -1,0 +1,32 @@
+# Cursor Rules — pruins-web
+
+## Architecture
+- Framework: React 19 + Vite 8.
+- UI Framework: Mantine v9.
+- Data Storage: IndexedDB (via Dexie).
+- Data Flow: Local-first (all predictions and assets must be persisted in DB).
+
+## Mantine v9 Conventions
+- Use `MantineProvider` (wrapped in `main.tsx`).
+- Use `Stack`, `Group`, `Container`, `Flex` for layout.
+- Use `Button`, `TextInput`, `Select`, `NumberInput`, `Switch` for forms.
+- Use `notifications.show` for user feedback.
+- Prefer `rem()` for spacing/sizes if needed, but rely on Mantine's defaults.
+- Always check Mantine v9 documentation for breaking changes from v7.
+
+## Typescript Rules
+- Standard interface naming (`PredictionResponse`, `PredictionRecord`).
+- Enforce `strict` mode in `tsconfig`.
+- All API and DB types should be co-located or clearly imported.
+
+## API & DB Best Practices
+- Never hardcode the API key in the code.
+- Read API key from `db.settings.get('apiKey')`.
+- All `Blob` objects resulting from predictions must be stored in `db.predictions` under `assetBlob`.
+- Use `URL.createObjectURL(blob)` for displaying assets.
+
+## AI Agent Behavior
+- Prioritize visual aesthetics.
+- Ensure the user is impressed by the UI design (gradients, glassmorphism, smooth transitions).
+- Use `framer-motion` for complex animations.
+- When adding new components, follow the existing Mantine pattern.
