@@ -9,14 +9,13 @@ import {
   Text,
   FileButton,
   Box,
-  LoadingOverlay,
   Alert,
   AspectRatio,
   Image,
   ActionIcon,
   SimpleGrid,
 } from '@mantine/core';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from '@mantine/form';
 import { Upload, Image as ImageIcon, Video as VideoIcon, AlertCircle, Check, X } from 'lucide-react';
 import { PApiClient } from '../api/client';
@@ -69,7 +68,6 @@ function parseRatio(ratioStr: string): number {
 }
 
 export function PredictionForm({ selectedModelId }: PredictionFormProps) {
-  const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -77,10 +75,14 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
   const [generationUrl, setGenerationUrl] = useState<string | null>(null);
   const [model, setModel] = useState<ModelConfig | null>(null);
   const [userSettings, setUserSettings] = useState<{ defaultAspectRatio: string; defaultSeed?: number }>({ defaultAspectRatio: '3:4' });
+  const [activePredictionIds, setActivePredictionIds] = useState<Set<string>>(new Set());
+  const [apiKeyState, setApiKeyState] = useState<string>('');
+  const pollingIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     const loadSettings = async () => {
       const settings = await getSettings();
+      setApiKeyState(settings.apiKey || '');
       setUserSettings({
         defaultAspectRatio: settings.defaultAspectRatio,
         defaultSeed: settings.defaultSeed,
@@ -93,6 +95,11 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
     const m = getModelById(selectedModelId);
     setModel(m || null);
     if (m) {
+      setActivePredictionIds(new Set());
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
       // Reset file state when model changes
       setFiles([]);
       setLatestGeneration(null);
@@ -108,6 +115,66 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
       return () => URL.revokeObjectURL(generationUrl);
     }
   }, [generationUrl]);
+
+  useEffect(() => {
+    if (activePredictionIds.size === 0) return;
+
+    pollingIntervalRef.current = setInterval(async () => {
+      if (!apiKeyState) return;
+      const client = new PApiClient(apiKeyState);
+      const ids = Array.from(activePredictionIds);
+
+      const promises = ids.map(async (id) => {
+        try {
+          const resp = await client.getPredictionStatus(id);
+          if (resp.status === 'succeeded') {
+            const blob = await client.downloadGeneration(resp.generation_url!);
+            await db.predictions.update(id, {
+              status: 'succeeded',
+              completedAt: Date.now(),
+              generationUrl: resp.generation_url,
+              assetBlob: blob,
+              assetType: resp.generation_url!.endsWith('.mp4') ? 'video' : 'image',
+            });
+            const completedPred = await db.predictions.get(id);
+            if (completedPred?.assetBlob) {
+              setLatestGeneration(completedPred);
+              setGenerationUrl(URL.createObjectURL(completedPred.assetBlob));
+            }
+            setActivePredictionIds((cur) => {
+              const next = new Set(cur);
+              next.delete(id);
+              return next;
+            });
+          } else if (resp.status === 'failed' || resp.status === 'canceled') {
+            await db.predictions.update(id, {
+              status: resp.status,
+              completedAt: Date.now(),
+              error: resp.error || resp.message || 'Prediction failed',
+            });
+            setActivePredictionIds((cur) => {
+              const next = new Set(cur);
+              next.delete(id);
+              return next;
+            });
+          } else {
+            await db.predictions.update(id, { status: resp.status });
+          }
+        } catch (err) {
+          console.error(`Polling error for ${id}:`, err);
+        }
+      });
+
+      await Promise.allSettled(promises);
+    }, 4000);
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [activePredictionIds, apiKeyState]);
 
   const form = useForm<Record<string, any>>({
     initialValues: {
@@ -157,7 +224,6 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
       return;
     }
 
-    setLoading(true);
     setError(null);
     setStatus('Uploading assets...');
 
@@ -222,57 +288,15 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
         createdAt: Date.now(),
       });
 
-      // 5. Poll
-      setStatus('Processing on Pruna Cloud...');
-      await pollPrediction(client, predId);
-
-      // 6. Fetch the completed prediction to display
-      const completedPrediction = await db.predictions.get(predId);
-      if (completedPrediction && completedPrediction.assetBlob) {
-        setLatestGeneration(completedPrediction);
-        const url = URL.createObjectURL(completedPrediction.assetBlob);
-        setGenerationUrl(url);
-      }
-
-      setStatus('Completed!');
+      setActivePredictionIds((cur) => new Set([...cur, predId]));
+      setStatus('Generation started');
     } catch (err: any) {
       console.error('Prediction error:', err);
       console.error('Error details:', err.errorPayload);
       setError(err.message || 'Workflow failed');
     } finally {
-      setLoading(false);
       setTimeout(() => setStatus(null), 5000);
     }
-  };
-
-  const pollPrediction = async (client: PApiClient, id: string) => {
-    return new Promise<void>((resolve, reject) => {
-      const interval = setInterval(async () => {
-        try {
-          const resp = await client.getPredictionStatus(id);
-          if (resp.status === 'succeeded') {
-            clearInterval(interval);
-            const blob = await client.downloadGeneration(resp.generation_url!);
-            await db.predictions.update(id, {
-              status: 'succeeded',
-              completedAt: Date.now(),
-              generationUrl: resp.generation_url,
-              assetBlob: blob,
-              assetType: resp.generation_url!.endsWith('.mp4') ? 'video' : 'image',
-            });
-            resolve();
-          } else if (resp.status === 'failed' || resp.status === 'canceled') {
-            clearInterval(interval);
-            reject(new Error(resp.status));
-          } else {
-            setStatus(`Status: ${resp.status}...`);
-          }
-        } catch (err) {
-          clearInterval(interval);
-          reject(err);
-        }
-      }, 4000);
-    });
   };
 
   const handleFileSelect = (payload: File | File[] | null) => {
@@ -303,7 +327,6 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
 
   return (
     <Paper withBorder p="xl" pos="relative" bg="var(--mantine-color-body)" style={{ border: '2px solid var(--mantine-color-default-border)', borderRadius: '4px' }}>
-      <LoadingOverlay visible={loading} zIndex={1000} overlayProps={{ radius: 'sm', blur: 2 }} />
 
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="lg">
@@ -314,6 +337,11 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
             <Text size="xs" c="dimmed" style={{ letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '4px' }}>
               {model.description}
             </Text>
+            {activePredictionIds.size > 0 && (
+              <Text size="xs" c="dimmed" mb="md" style={{ letterSpacing: '0.02em' }}>
+                {activePredictionIds.size} GENERATION{activePredictionIds.size > 1 ? 'S' : ''} IN PROGRESS
+              </Text>
+            )}
             <Group mt="xs" gap="xs">
               <Text size="xs" c="indigo" fw={700} style={{ letterSpacing: '0.02em' }}>
                 {model.pricing}
@@ -336,49 +364,49 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
           {model.parameters
             .filter(p => p.key !== 'prompt' && p.key !== 'images' && p.key !== 'image' && p.key !== 'src_ref_images')
             .map((param) => (
-            <Box key={param.key}>
-              {param.type === 'select' && (
-                <Select
-                  label={param.label.toUpperCase()}
-                  data={param.options ?? (param.key === 'aspect_ratio' ? model.defaultAspectRatios : [])}
-                  {...form.getInputProps(param.key)}
-                  styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
-                />
-              )}
-              {param.type === 'number' && (
-                <NumberInput
-                  label={param.label.toUpperCase()}
-                  placeholder={param.default?.toString()}
-                  min={param.min}
-                  max={param.max}
-                  step={param.step}
-                  {...form.getInputProps(param.key)}
-                  styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
-                />
-              )}
-              {param.type === 'boolean' && (
-                <Select
-                  label={param.label.toUpperCase()}
-                  data={[
-                    { value: 'true', label: 'TRUE' },
-                    { value: 'false', label: 'FALSE' },
-                  ]}
-                  defaultValue={param.default ? 'true' : 'false'}
-                  {...form.getInputProps(param.key)}
-                  styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
-                />
-              )}
-              {param.type === 'text' && (
-                <Textarea
-                  label={param.label.toUpperCase()}
-                  placeholder={`Enter ${param.label.toLowerCase()}`}
-                  minRows={2}
-                  {...form.getInputProps(param.key)}
-                  styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
-                />
-              )}
-            </Box>
-          ))}
+              <Box key={param.key}>
+                {param.type === 'select' && (
+                  <Select
+                    label={param.label.toUpperCase()}
+                    data={param.options ?? (param.key === 'aspect_ratio' ? model.defaultAspectRatios : [])}
+                    {...form.getInputProps(param.key)}
+                    styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
+                  />
+                )}
+                {param.type === 'number' && (
+                  <NumberInput
+                    label={param.label.toUpperCase()}
+                    placeholder={param.default?.toString()}
+                    min={param.min}
+                    max={param.max}
+                    step={param.step}
+                    {...form.getInputProps(param.key)}
+                    styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
+                  />
+                )}
+                {param.type === 'boolean' && (
+                  <Select
+                    label={param.label.toUpperCase()}
+                    data={[
+                      { value: 'true', label: 'TRUE' },
+                      { value: 'false', label: 'FALSE' },
+                    ]}
+                    defaultValue={param.default ? 'true' : 'false'}
+                    {...form.getInputProps(param.key)}
+                    styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
+                  />
+                )}
+                {param.type === 'text' && (
+                  <Textarea
+                    label={param.label.toUpperCase()}
+                    placeholder={`Enter ${param.label.toLowerCase()}`}
+                    minRows={2}
+                    {...form.getInputProps(param.key)}
+                    styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
+                  />
+                )}
+              </Box>
+            ))}
 
           {/* File input for models that require images */}
           {(model.requiresImage || model.parameters.some(p => p.key === 'image' || p.key === 'images' || p.key === 'src_ref_images')) && (
@@ -461,7 +489,6 @@ export function PredictionForm({ selectedModelId }: PredictionFormProps) {
             type="submit"
             size="md"
             fullWidth
-            loading={loading}
             leftSection={model.type.includes('video') ? <VideoIcon size={18} /> : <ImageIcon size={18} />}
             style={{ borderRadius: '2px', border: '2px solid var(--mantine-color-indigo-6)', height: '48px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}
           >
