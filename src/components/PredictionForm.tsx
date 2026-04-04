@@ -38,17 +38,17 @@ function ImagePreview({ file, onRemove }: { file: File; onRemove: () => void }) 
   if (!url) return null;
 
   return (
-    <Box pos="relative">
+    <Box pos="relative" style={{ border: '2px solid var(--mantine-color-default-border)' }}>
       <AspectRatio ratio={1}>
-        <Image src={url} radius="md" fit="cover" style={{ border: '1px solid var(--mantine-color-default-border)' }} />
+        <Image src={url} radius="0" fit="cover" />
       </AspectRatio>
       <ActionIcon 
         pos="absolute" 
-        top={-8} 
-        right={-8} 
+        top={0} 
+        right={0} 
         color="red" 
         size="sm" 
-        radius="xl" 
+        radius="0"
         variant="filled"
         onClick={(e) => {
           e.stopPropagation();
@@ -56,7 +56,7 @@ function ImagePreview({ file, onRemove }: { file: File; onRemove: () => void }) 
         }}
         style={{ zIndex: 10 }}
       >
-        <X size={12} />
+        <X size={14} />
       </ActionIcon>
     </Box>
   );
@@ -205,43 +205,46 @@ export function PredictionForm({ type }: PredictionFormProps) {
   };
 
   return (
-    <Paper withBorder p="xl" radius="md" pos="relative" bg="var(--mantine-color-body)">
+    <Paper withBorder p="xl" pos="relative" bg="var(--mantine-color-body)" style={{ border: '2px solid var(--mantine-color-default-border)', borderRadius: '4px' }}>
       <LoadingOverlay visible={loading} zIndex={1000} overlayProps={{ radius: 'sm', blur: 2 }} />
       
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="lg">
-          <Box>
-            <Text size="xl" fw={700}>
-              {type === 'p-image-edit' ? 'Image Reference Editing' : 
-               type === 'p-image' ? 'Image Generation' : 'Video Generation'}
+          <Box style={{ borderBottom: '2px solid var(--mantine-color-default-border)', paddingBottom: 'md' }}>
+            <Text size="xl" fw={700} style={{ letterSpacing: '0.02em' }}>
+              {type === 'p-image-edit' ? 'IMAGE REFERENCE EDITING' : 
+               type === 'p-image' ? 'IMAGE GENERATION' : 'VIDEO GENERATION'}
             </Text>
-            <Text size="xs" c="dimmed">Powered by Pruna AI Cloud</Text>
+            <Text size="xs" c="dimmed" style={{ letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '4px' }}>Powered by Pruna AI Cloud</Text>
           </Box>
           
           <Textarea
-            label="Visual Prompt"
+            label="VISUAL PROMPT"
             placeholder="A cinematic aerial shot of a neon cyberpunk city..."
             required
             minRows={4}
             {...form.getInputProps('prompt')}
+            styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
           />
 
           <Group grow>
             <Select
-              label="Aspect Ratio"
+              label="ASPECT RATIO"
               data={['3:4', '4:3', '9:16', '16:9', '1:1', '21:9']}
               {...form.getInputProps('aspectRatio')}
+              styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
             />
             <NumberInput
-              label="Seed"
+              label="SEED"
               placeholder="Random"
               {...form.getInputProps('seed')}
+              styles={{ input: { borderRadius: '2px', border: '2px solid var(--mantine-color-default-border)' } }}
             />
           </Group>
 
           {type !== 'p-image' && (
             <Box>
-              <Text size="sm" fw={500} mb={4}>{isImageControl ? 'Source Images (1-5)' : 'Base Frame (Optional)'}</Text>
+              <Text size="sm" fw={700} mb={4} style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}>{isImageControl ? 'SOURCE IMAGES (1-5)' : 'BASE FRAME (OPTIONAL)'}</Text>
               <Group>
                 <FileButton 
                   onChange={handleFileSelect} 
@@ -249,13 +252,13 @@ export function PredictionForm({ type }: PredictionFormProps) {
                   multiple={isImageControl}
                 >
                   {(props) => (
-                    <Button {...props} variant="light" color="indigo" leftSection={<Upload size={16} />}>
-                      Select Files
+                    <Button {...props} variant="outline" color="indigo" leftSection={<Upload size={16} />} style={{ borderRadius: '2px', border: '2px solid var(--mantine-color-indigo-6)' }}>
+                      SELECT FILES
                     </Button>
                   )}
                 </FileButton>
                 <Text size="xs" c="dimmed">
-                  {files.length > 0 ? `${files.length} file(s) selected` : 'Supports PNG, JPG, WEBP'}
+                  {files.length > 0 ? `${files.length} FILE(S) SELECTED` : 'SUPPORTS PNG, JPG, WEBP'}
                 </Text>
               </Group>
               
@@ -274,13 +277,13 @@ export function PredictionForm({ type }: PredictionFormProps) {
           )}
 
           {status && (
-            <Alert icon={<Check size={16} />} title="Cloud Processing" color="indigo" variant="light">
+            <Alert icon={<Check size={16} />} title="CLOUD PROCESSING" color="indigo" variant="light" style={{ borderRadius: '2px', border: '2px solid var(--mantine-color-indigo-6)' }}>
               {status}
             </Alert>
           )}
 
           {error && (
-            <Alert icon={<AlertCircle size={16} />} title="Workflow Interrupted" color="red">
+            <Alert icon={<AlertCircle size={16} />} title="WORKFLOW INTERRUPTED" color="red" style={{ borderRadius: '2px', border: '2px solid var(--mantine-color-red-6)' }}>
               {error}
             </Alert>
           )}
@@ -291,8 +294,9 @@ export function PredictionForm({ type }: PredictionFormProps) {
             fullWidth 
             loading={loading}
             leftSection={type === 'p-gen-video' ? <VideoIcon size={18} /> : <ImageIcon size={18} />}
+            style={{ borderRadius: '2px', border: '2px solid var(--mantine-color-indigo-6)', height: '48px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}
           >
-            {isImageControl ? 'Initialize Cloud Processing' : isImageGen ? 'Generate Image' : 'Queue Video Generation'}
+            {isImageControl ? 'INITIALIZE CLOUD PROCESSING' : isImageGen ? 'GENERATE IMAGE' : 'QUEUE VIDEO GENERATION'}
           </Button>
         </Stack>
       </form>

@@ -1,7 +1,6 @@
-
-import '@mantine/core/styles.css';
-import '@mantine/notifications/styles.css';
-import { useState, useEffect } from 'react';
+import "@mantine/core/styles.css";
+import "@mantine/notifications/styles.css";
+import { useState, useEffect } from "react";
 import {
   MantineProvider,
   AppShell,
@@ -15,50 +14,81 @@ import {
   Button,
   Group,
   Select,
-  NumberInput
-} from '@mantine/core';
-import { Notifications, notifications } from '@mantine/notifications';
-import { ModalsProvider } from '@mantine/modals';
-import { useDisclosure } from '@mantine/hooks';
-import { Sidebar } from './components/Sidebar.tsx';
-import { Header } from './components/Header.tsx';
-import { PredictionForm } from './components/PredictionForm.tsx';
-import { Gallery } from './components/Gallery.tsx';
-import { getSettings, updateSettings } from './db';
+  NumberInput,
+} from "@mantine/core";
+import { Notifications, notifications } from "@mantine/notifications";
+import { ModalsProvider } from "@mantine/modals";
+import { useDisclosure } from "@mantine/hooks";
+import { Sidebar } from "./components/Sidebar.tsx";
+import { Header } from "./components/Header.tsx";
+import { PredictionForm } from "./components/PredictionForm.tsx";
+import { Gallery } from "./components/Gallery.tsx";
+import { getSettings, updateSettings } from "./db";
 
-
-export type View = 'image-gen' | 'image' | 'video' | 'gallery' | 'settings';
+export type View = "image-gen" | "image" | "video" | "gallery" | "settings";
 
 const theme = createTheme({
-  primaryColor: 'indigo',
+  primaryColor: "indigo",
   primaryShade: 6,
   colors: {
     indigo: [
-      '#f0f1ff',
-      '#d9dbff',
-      '#bfc2ff',
-      '#9fa4ff',
-      '#7e84ff',
-      '#5c67ff',
-      '#4a54e1',
-      '#3941c4',
-      '#292f9c',
-      '#1a1d75',
+      "#f0f1ff",
+      "#d9dbff",
+      "#bfc2ff",
+      "#9fa4ff",
+      "#7e84ff",
+      "#6366f1",
+      "#4f46e5",
+      "#3941c4",
+      "#292f9c",
+      "#1a1d75",
     ],
   },
-  fontFamily: 'Inter, sans-serif',
+  fontFamily: "Inter, sans-serif",
+  radius: {
+    sm: "2px",
+    md: "4px",
+    lg: "6px",
+    xl: "8px",
+  },
+  headings: {
+    fontWeight: "700",
+  },
+  defaultRadius: "sm",
+  components: {
+    Button: {
+      defaultProps: {
+        radius: "sm",
+      },
+    },
+    Input: {
+      defaultProps: {
+        radius: "sm",
+      },
+    },
+    Card: {
+      defaultProps: {
+        radius: "sm",
+      },
+    },
+    Paper: {
+      defaultProps: {
+        radius: "sm",
+      },
+    },
+  },
 });
 
 function AppContent() {
-  const [currentView, setCurrentView] = useState<View>('image-gen');
+  const [currentView, setCurrentView] = useState<View>("image-gen");
   const [opened, { toggle }] = useDisclosure();
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [defaultAspectRatio, setDefaultAspectRatio] = useState('3:4');
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [defaultAspectRatio, setDefaultAspectRatio] = useState("3:4");
   const [defaultSeed, setDefaultSeed] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    getSettings().then(settings => {
+    getSettings().then((settings) => {
       setHasApiKey(!!settings.apiKey);
       setApiKeyInput(settings.apiKey);
       setDefaultAspectRatio(settings.defaultAspectRatio);
@@ -71,19 +101,19 @@ function AppContent() {
       await updateSettings({
         apiKey: apiKeyInput,
         defaultAspectRatio,
-        defaultSeed
+        defaultSeed,
       });
       setHasApiKey(!!apiKeyInput);
       notifications.show({
-        title: 'Settings Saved',
-        message: 'Your application settings have been updated successfully.',
-        color: 'green',
+        title: "Settings Saved",
+        message: "Your application settings have been updated successfully.",
+        color: "green",
       });
-    } catch (error) {
+    } catch {
       notifications.show({
-        title: 'Error',
-        message: 'Failed to save settings.',
-        color: 'red',
+        title: "Error",
+        message: "Failed to save settings.",
+        color: "red",
       });
     }
   };
@@ -92,19 +122,27 @@ function AppContent() {
 
   return (
     <AppShell
-      header={{ height: 60 }}
+      header={{ height: 64 }}
       navbar={{
-        width: 260,
-        breakpoint: 'sm',
+        width: 280,
+        breakpoint: "sm",
         collapsed: { mobile: !opened },
       }}
       padding="md"
     >
-      <AppShell.Header px="md">
+      <AppShell.Header
+        px="md"
+        style={{
+          borderBottom: "2px solid var(--mantine-color-default-border)",
+        }}
+      >
         <Header opened={opened} toggle={toggle} currentView={currentView} />
       </AppShell.Header>
 
-      <AppShell.Navbar p="md">
+      <AppShell.Navbar
+        p="md"
+        style={{ borderRight: "2px solid var(--mantine-color-default-border)" }}
+      >
         <Sidebar
           currentView={currentView}
           onViewChange={(v: View) => {
@@ -116,47 +154,99 @@ function AppContent() {
 
       <AppShell.Main>
         <Box maw={1200} mx="auto" py="md">
-          {currentView === 'image-gen' && <PredictionForm type="p-image" />}
-          {currentView === 'image' && <PredictionForm type="p-image-edit" />}
-          {currentView === 'video' && <PredictionForm type="p-gen-video" />}
-          {currentView === 'gallery' && <Gallery />}
-          {currentView === 'settings' && (
+          {currentView === "image-gen" && <PredictionForm type="p-image" />}
+          {currentView === "image" && <PredictionForm type="p-image-edit" />}
+          {currentView === "video" && <PredictionForm type="p-gen-video" />}
+          {currentView === "gallery" && <Gallery />}
+          {currentView === "settings" && (
             <Box py="xl" maw={600}>
               <Stack gap="xl">
-                <Box>
-                  <Text size="xl" fw={700}>Application Settings</Text>
-                  <Text c="dimmed">Configure your Pruna AI API key to enable image and video generation.</Text>
+                <Box
+                  style={{
+                    borderBottom:
+                      "2px solid var(--mantine-color-default-border)",
+                    paddingBottom: "md",
+                  }}
+                >
+                  <Text size="xl" fw={700} style={{ letterSpacing: "0.02em" }}>
+                    APPLICATION SETTINGS
+                  </Text>
+                  <Text
+                    c="dimmed"
+                    size="sm"
+                    style={{
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                      marginTop: "4px",
+                    }}
+                  >
+                    Configure your Pruna AI API key to enable image and video
+                    generation.
+                  </Text>
                 </Box>
 
                 <Stack gap="md">
                   <PasswordInput
-                    label="Pruna API Key"
+                    label="PRUNA API KEY"
                     placeholder="Enter your API key"
                     description="Your key is stored locally in your browser's IndexedDB."
                     value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.currentTarget.value)}
+                    styles={{
+                      input: {
+                        borderRadius: "2px",
+                        border: "2px solid var(--mantine-color-default-border)",
+                      },
+                    }}
                   />
 
                   <Group grow>
                     <Select
-                      label="Default Aspect Ratio"
+                      label="DEFAULT ASPECT RATIO"
                       description="Default ratio for new predictions"
-                      data={['3:4', '4:3', '9:16', '16:9', '1:1', '21:9']}
+                      data={["3:4", "4:3", "9:16", "16:9", "1:1", "21:9"]}
                       value={defaultAspectRatio}
-                      onChange={(val) => setDefaultAspectRatio(val || '3:4')}
+                      onChange={(val) => setDefaultAspectRatio(val || "3:4")}
+                      styles={{
+                        input: {
+                          borderRadius: "2px",
+                          border:
+                            "2px solid var(--mantine-color-default-border)",
+                        },
+                      }}
                     />
                     <NumberInput
-                      label="Default Seed"
+                      label="DEFAULT SEED"
                       description="Leave empty for random seeds"
                       placeholder="Random"
                       value={defaultSeed}
-                      onChange={(val) => setDefaultSeed(val as number || undefined)}
+                      onChange={(val) =>
+                        setDefaultSeed((val as number) || undefined)
+                      }
+                      styles={{
+                        input: {
+                          borderRadius: "2px",
+                          border:
+                            "2px solid var(--mantine-color-default-border)",
+                        },
+                      }}
                     />
                   </Group>
 
                   <Group justify="flex-end">
-                    <Button onClick={handleSaveSettings} color="indigo">
-                      Save Settings
+                    <Button
+                      onClick={handleSaveSettings}
+                      color="indigo"
+                      style={{
+                        borderRadius: "2px",
+                        border: "2px solid var(--mantine-color-indigo-6)",
+                        height: "44px",
+                        fontWeight: 700,
+                        letterSpacing: "0.05em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      SAVE SETTINGS
                     </Button>
                   </Group>
                 </Stack>

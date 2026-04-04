@@ -12,24 +12,24 @@ export function Gallery() {
   if (!predictions) {
     return (
       <Stack gap="xl" maw={800} mx="auto" w="100%">
-        <Skeleton height={500} radius="md" />
-        <Skeleton height={500} radius="md" />
+        <Skeleton height={500} radius="0" />
+        <Skeleton height={500} radius="0" />
       </Stack>
     );
   }
 
   return (
     <Stack gap="xl" maw={800} mx="auto" w="100%">
-      <Box>
-        <Text size="xl" fw={700}>Activity Feed</Text>
-        <Text size="sm" c="dimmed">Your generated assets displayed in full quality.</Text>
+      <Box style={{ borderBottom: '2px solid var(--mantine-color-default-border)', paddingBottom: 'md' }}>
+        <Text size="xl" fw={700} style={{ letterSpacing: '0.02em' }}>ACTIVITY FEED</Text>
+        <Text size="sm" c="dimmed" style={{ letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: '4px' }}>Your generated assets displayed in full quality.</Text>
       </Box>
 
       {predictions.length === 0 ? (
-        <Center py={100}>
+        <Center py={100} style={{ border: '2px dashed var(--mantine-color-default-border)', borderRadius: '4px' }}>
           <Stack align="center" gap="sm">
-            <Text c="dimmed">No generations yet.</Text>
-            <Button variant="light" color="indigo" onClick={() => window.location.reload()}>Start Creating</Button>
+            <Text c="dimmed">NO GENERATIONS YET.</Text>
+            <Button variant="outline" color="indigo" onClick={() => window.location.reload()} style={{ borderRadius: '2px', border: '2px solid var(--mantine-color-indigo-6)' }}>START CREATING</Button>
           </Stack>
         </Center>
       ) : (
@@ -89,14 +89,14 @@ function MediaFeedCard({ prediction: p }: { prediction: PredictionRecord }) {
         ) : (
           <img src={modalMedia.src} style={{ maxWidth: '100vw', maxHeight: '95vh', objectFit: 'contain', display: 'block' }} alt="Fullscreen preview" />
         )}
-        <ActionIcon pos="absolute" top={10} right={10} onClick={close} radius="xl" color="dark" variant="filled" size="lg">
+        <ActionIcon pos="absolute" top={10} right={10} onClick={close} radius="0" color="dark" variant="filled" size="lg">
           <X size={16} />
         </ActionIcon>
       </Box>
     </Modal>
     
-    <Card shadow="md" padding={0} radius="md" withBorder bg="var(--mantine-color-body)">
-      <Box bg="var(--mantine-color-dark-8)" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+    <Card shadow="md" padding={0} withBorder bg="var(--mantine-color-body)" style={{ border: '2px solid var(--mantine-color-default-border)', borderRadius: '4px' }}>
+      <Box bg="var(--mantine-color-dark-8)" style={{ borderBottom: '2px solid var(--mantine-color-default-border)' }}>
         {p.status === 'succeeded' ? (
           p.assetType === 'video' ? (
             <video
@@ -126,15 +126,15 @@ function MediaFeedCard({ prediction: p }: { prediction: PredictionRecord }) {
 
       <Stack p="xl" gap="sm">
         <Group justify="space-between">
-          <Badge color={p.model.includes('video') ? 'teal' : 'indigo'} variant="light">
-            {p.model.includes('video') ? 'Video' : 'Image'}
+          <Badge color={p.model.includes('video') ? 'teal' : 'indigo'} variant="light" style={{ borderRadius: '2px', border: '2px solid' }}>
+            {p.model.includes('video') ? 'VIDEO' : 'IMAGE'}
           </Badge>
-          <Text size="xs" c="dimmed">
+          <Text size="xs" c="dimmed" style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             {new Date(p.createdAt).toLocaleDateString()}
           </Text>
         </Group>
 
-        <Text size="lg" fw={500}>
+        <Text size="lg" fw={500} style={{ letterSpacing: '0.02em' }}>
           {p.input.prompt}
         </Text>
 
@@ -142,7 +142,7 @@ function MediaFeedCard({ prediction: p }: { prediction: PredictionRecord }) {
           <Box mt="xs">
             <Group gap={6} mb={8}>
               <Layers size={14} color="gray" />
-              <Text size="xs" c="dimmed" fw={600}>SOURCE ASSETS</Text>
+              <Text size="xs" c="dimmed" fw={700} style={{ letterSpacing: '0.05em', textTransform: 'uppercase' }}>SOURCE ASSETS</Text>
             </Group>
             <Group gap="sm">
               {(Array.isArray(p.input.images) ? p.input.images : [p.input.image]).filter(Boolean).map((img: string, idx) => (
@@ -150,10 +150,10 @@ function MediaFeedCard({ prediction: p }: { prediction: PredictionRecord }) {
                   key={idx} 
                   src={img} 
                   w={80} h={80} 
-                  radius="md" 
+                  radius="0" 
                   fit="cover" 
                   fallbackSrc="https://placehold.co/80x80?text=Source" 
-                  style={{ cursor: 'zoom-in' }}
+                  style={{ cursor: 'zoom-in', border: '2px solid var(--mantine-color-default-border)' }}
                   onClick={() => handleOpenModal(img, 'image')}
                 />
               ))}
@@ -163,20 +163,22 @@ function MediaFeedCard({ prediction: p }: { prediction: PredictionRecord }) {
 
         <Group gap="sm" mt="md">
           <Button
-            variant="light"
+            variant="outline"
             flex={1}
             leftSection={<Download size={16} />}
             onClick={handleDownload}
             disabled={p.status !== 'succeeded'}
             size="md"
+            style={{ borderRadius: '2px', border: '2px solid var(--mantine-color-indigo-6)', height: '44px', fontWeight: 600 }}
           >
-            Download Asset
+            DOWNLOAD ASSET
           </Button>
           <ActionIcon
-            variant="light"
+            variant="outline"
             color="red"
             size="xl"
             onClick={handleDelete}
+            style={{ borderRadius: '2px', border: '2px solid var(--mantine-color-red-6)' }}
           >
             <Trash2 size={20} />
           </ActionIcon>
