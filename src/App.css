@@ -160,6 +160,43 @@ button:not(:disabled):hover {
     box-shadow: var(--shadow-glow);
 }
 
+/* Gallery Grid Hover Effects */
+.gallery-grid-card:hover .gallery-card-overlay {
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.gallery-grid-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Ensure overlay is above all content */
+.gallery-card-overlay {
+    z-index: 10 !important;
+    visibility: hidden;
+}
+
+/* Force buttons to be on top */
+.gallery-grid-card .mantine-ActionIcon-root {
+    z-index: 12 !important;
+    position: relative !important;
+}
+
+/* Responsive Grid Adjustments */
+@media (max-width: 768px) {
+    .gallery-grid-container {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)) !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .gallery-grid-container {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+}
+
 button:not(:disabled):active {
     transform: translateY(0);
 }
